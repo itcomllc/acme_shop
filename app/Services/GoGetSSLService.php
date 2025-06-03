@@ -29,6 +29,9 @@ class GoGetSSLService
 
     /**
      * Get authentication key with caching
+     * 
+     * @return string
+     * @throws \Exception
      */
     private function getAuthKey(): string
     {
@@ -88,6 +91,9 @@ class GoGetSSLService
 
     /**
      * Get available SSL products
+     * 
+     * @return array<int, array<string, mixed>>
+     * @throws \Exception
      */
     public function getProducts(): array
     {
@@ -117,6 +123,11 @@ class GoGetSSLService
 
     /**
      * Create SSL certificate order
+     * 
+     * @param array<string, mixed> $orderData
+     * @return array<string, mixed>
+     * @throws \InvalidArgumentException
+     * @throws \Exception
      */
     public function createOrder(array $orderData): array
     {
@@ -235,6 +246,10 @@ class GoGetSSLService
 
     /**
      * Get order status
+     * 
+     * @param int $orderId
+     * @return array<string, mixed>
+     * @throws \Exception
      */
     public function getOrderStatus(int $orderId): array
     {
@@ -266,6 +281,10 @@ class GoGetSSLService
 
     /**
      * Download certificate
+     * 
+     * @param int $orderId
+     * @return array<string, mixed>
+     * @throws \Exception
      */
     public function downloadCertificate(int $orderId): array
     {
@@ -303,6 +322,10 @@ class GoGetSSLService
 
     /**
      * Resend validation email
+     * 
+     * @param int $orderId
+     * @return array<string, mixed>
+     * @throws \Exception
      */
     public function resendValidationEmail(int $orderId): array
     {
@@ -335,6 +358,11 @@ class GoGetSSLService
 
     /**
      * Revoke certificate
+     * 
+     * @param int $orderId
+     * @param string $reason
+     * @return array<string, mixed>
+     * @throws \Exception
      */
     public function revokeCertificate(int $orderId, string $reason = 'unspecified'): array
     {
@@ -372,6 +400,10 @@ class GoGetSSLService
 
     /**
      * Get domain approval emails
+     * 
+     * @param string $domain
+     * @return array<string, mixed>
+     * @throws \Exception
      */
     public function getDomainEmails(string $domain): array
     {
@@ -408,6 +440,9 @@ class GoGetSSLService
 
     /**
      * Get unified approval emails for domain
+     * 
+     * @param string $domain
+     * @return array<int, string>
      */
     public function getApprovalEmails(string $domain): array
     {
@@ -434,6 +469,9 @@ class GoGetSSLService
 
     /**
      * Get account information
+     * 
+     * @return array<string, mixed>
+     * @throws \Exception
      */
     public function getAccountInfo(): array
     {
@@ -462,6 +500,9 @@ class GoGetSSLService
 
     /**
      * Get account balance
+     * 
+     * @return array<string, mixed>
+     * @throws \Exception
      */
     public function getBalance(): array
     {
@@ -492,9 +533,11 @@ class GoGetSSLService
 
     /**
      * 全てのSSL注文を取得
+     * 
      * @param int|null $limit 取得する件数（nullの場合は制限なし）
      * @param int|null $offset オフセット（nullの場合は0）
-     * @return array 全てのSSL注文の情報
+     * @return array{orders?: array<int, array{order_id: string}>, limit?: int, offset?: int, count?: int}
+     * @throws \Exception
      */
     public function getAllSSLOrders($limit = null, $offset = null)
     {
@@ -534,10 +577,12 @@ class GoGetSSLService
 
     /**
      * 注文のステータスを取得
-     * @param array|string|null $orderIds 注文IDの配列または単一の注文ID（nullの場合は全ての注文を取得）
+     * 
+     * @param array<int, string>|string|null $orderIds 注文IDの配列または単一の注文ID（nullの場合は全ての注文を取得）
      * @param int|null $limit 取得する件数（nullの場合は制限なし）
      * @param int|null $offset オフセット（nullの場合は0）
-     * @return array 注文ステータスの情報
+     * @return array{certificates?: array<int, array<string, mixed>>}
+     * @throws \Exception
      */
     public function getOrderStatuses($orderIds = null, $limit = null, $offset = null)
     {
@@ -595,8 +640,11 @@ class GoGetSSLService
         }
     }
 
-   /**
+    /**
      * SSL商品一覧を取得
+     * 
+     * @return array{products?: array<int, array{id: int, product?: string, brand?: string, product_type?: string}>}
+     * @throws \Exception
      */
     public function getSslProducts()
     {
@@ -622,6 +670,10 @@ class GoGetSSLService
 
     /**
      * CSRからドメイン名を抽出
+     * 
+     * @param string $csr
+     * @return string
+     * @throws \Exception
      */
     public function extractDomainFromCSR($csr)
     {
@@ -656,6 +708,8 @@ class GoGetSSLService
 
     /**
      * Clear auth key cache
+     * 
+     * @return void
      */
     public function clearAuthCache(): void
     {
@@ -668,6 +722,8 @@ class GoGetSSLService
 
     /**
      * Test connection
+     * 
+     * @return array{success: bool, message: string, account?: array<string, mixed>, error?: string}
      */
     public function testConnection(): array
     {
@@ -691,6 +747,11 @@ class GoGetSSLService
 
     /**
      * Handle API errors
+     * 
+     * @param string $message
+     * @param \Exception $e
+     * @param array<string, mixed> $context
+     * @return void
      */
     private function handleApiError(string $message, \Exception $e, array $context): void
     {
