@@ -56,4 +56,28 @@ return [
         'sandbox' => env('GOGETSSL_SANDBOX', false),
     ],
 
+    'google' => [
+        'project_id' => env('GOOGLE_CLOUD_PROJECT_ID'),
+        'key_file_path' => env('GOOGLE_APPLICATION_CREDENTIALS'),
+        'key_data' => env('GOOGLE_SERVICE_ACCOUNT_KEY_JSON'),
+        
+        'certificate_manager' => [
+            'location' => env('GOOGLE_CERT_MANAGER_LOCATION', 'global'),
+            'enabled' => env('GOOGLE_CERT_MANAGER_ENABLED', false),
+            'auto_renewal' => env('GOOGLE_CERT_MANAGER_AUTO_RENEWAL', true),
+            'default_lifetime' => env('GOOGLE_CERT_MANAGER_DEFAULT_LIFETIME', '90 days'),
+        ],
+        
+        'cloud_dns' => [
+            'enabled' => env('GOOGLE_CLOUD_DNS_ENABLED', false),
+            'zone_name' => env('GOOGLE_CLOUD_DNS_ZONE_NAME'),
+            'auto_create_records' => env('GOOGLE_CLOUD_DNS_AUTO_CREATE_RECORDS', false),
+        ],
+        
+        'load_balancer' => [
+            'auto_attach_certificates' => env('GOOGLE_LB_AUTO_ATTACH_CERTS', false),
+            'ssl_policy' => env('GOOGLE_LB_SSL_POLICY'),
+        ]
+    ],
+
 ];
