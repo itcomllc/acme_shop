@@ -38,7 +38,7 @@
                         </ul>
                         
                         <button
-                            wire:click="$emit('openSubscriptionModal')"
+                            @click="$dispatch('open-subscription-modal')"
                             class="w-full py-3 px-4 rounded-lg font-medium transition-colors {{ $key === 'professional' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900' }}"
                         >
                             <svg class="h-4 w-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Relations\{HasOne, HasMany};
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
@@ -60,11 +60,25 @@ class User extends Authenticatable
             ->implode('');
     }
 
+    /**
+     * Get the user's active subscription
+     */
+    public function getActiveSubscriptionAttribute(): ?Subscription
+    {
+        return $this->subscriptions()->where('status', 'active')->first();
+    }
+
+    /**
+     * Get the user's active subscription relationship
+     */
     public function activeSubscription(): HasOne
     {
         return $this->hasOne(Subscription::class)->where('status', 'active');
     }
 
+    /**
+     * Get all subscriptions for the user
+     */
     public function subscriptions(): HasMany
     {
         return $this->hasMany(Subscription::class);

@@ -15,7 +15,7 @@
                         <div class="text-center">
                             <h4 class="font-medium text-gray-900">{{ $plan['name'] ?? ucfirst($key) }}</h4>
                             <div class="text-lg font-bold text-blue-600 mt-1">
-                                ${{ number_format(($plan['price'] ?? 0) / 100, 2) }}/mo
+                                ${{ number_format(((int)($plan['price'] ?? 0)) / 100, 2) }}/mo
                             </div>
                             <p class="text-sm text-gray-600 mt-1">
                                 {{ $plan['max_domains'] ?? $plan['domains'] ?? 1 }}

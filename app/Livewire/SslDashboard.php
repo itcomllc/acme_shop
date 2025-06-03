@@ -17,6 +17,7 @@ class SslDashboard extends Component
     protected $listeners = [
         'certificateCreated' => 'refreshDashboard',
         'subscriptionCreated' => 'refreshDashboard',
+        'open-subscription-modal' => 'openSubscriptionModal',
         'closeModal' => 'closeModals'
     ];
 
