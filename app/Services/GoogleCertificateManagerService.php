@@ -21,7 +21,7 @@ class GoogleCertificateManagerService
 
     public function __construct()
     {
-        $this->projectId = config('services.google.project_id');
+        $this->projectId = config('services.google.project_id') ?? '__GOOGLE_PROJECT_ID__';
         $this->location = config('services.google.certificate_manager.location', 'global');
         
         if (empty($this->projectId)) {
@@ -44,7 +44,7 @@ class GoogleCertificateManagerService
             $this->googleClient->setAuthConfig($keyFilePath);
         } else {
             // JSON文字列からの認証
-            $keyData = config('services.google.key_data');
+            $keyData = config('services.google.key_data') ?? '{installed: false}';
             if ($keyData) {
                 $this->googleClient->setAuthConfig(json_decode($keyData, true));
             } else {

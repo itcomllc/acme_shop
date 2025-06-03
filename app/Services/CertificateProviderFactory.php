@@ -329,4 +329,205 @@ class CertificateProviderFactory
             'unconfigured_providers' => array_diff($allProviders, $configuredProviders)
         ];
     }
+
+    /**
+     * Get best provider based on requirements
+     * 
+     * @param array{domains?: array, certificate_type?: string, preferred_provider?: string, requires_download?: bool, auto_managed?: bool, budget_constraint?: string} $requirements
+     */
+    public function getBestProvider(array $requirements): object
+    {
+        $preferredProvider = $requirements['preferred_provider'] ?? null;
+        $certificateType = $requirements['certificate_type'] ?? 'DV';
+        $requiresDownload = $requirements['requires_download'] ?? false;
+        $autoManaged = $requirements['auto_managed'] ?? false;
+        $budgetConstraint = $requirements['budget_constraint'] ?? 'medium';
+
+        // If specific provider is preferred and available, use it
+        if ($preferredProvider && $this->isProviderAvailable($preferredProvider)) {
+            return $this->createProvider($preferredProvider);
+        }
+
+        // Auto-select based on requirements
+        $availableProviders = $this->getProviderStatus()['available_providers'];
+        
+        // Filter providers based on requirements
+        $suitableProviders = [];
+        
+        foreach ($availableProviders as $provider) {
+            $capabilities = $this->getProviderCapabilities()[$provider] ?? [];
+            
+            // Check certificate type support
+            if (!in_array($certificateType, $capabilities['validation_types'] ?? [])) {
+                continue;
+            }
+
+            // Check download requirement
+            if ($requiresDownload && !($capabilities['download_support'] ?? true)) {
+                continue;
+            }
+
+            // Check auto-management preference
+            if ($autoManaged && !($capabilities['auto_renewal'] ?? false)) {
+                continue;
+            }
+
+            // Add provider with score
+            $score = $this->calculateProviderScore($provider, $requirements);
+            $suitableProviders[] = ['provider' => $provider, 'score' => $score];
+        }
+
+        if (empty($suitableProviders)) {
+            throw new \Exception('No suitable providers available for the given requirements');
+        }
+
+        // Sort by score (highest first)
+        usort($suitableProviders, fn($a, $b) => $b['score'] <=> $a['score']);
+        
+        $bestProvider = $suitableProviders[0]['provider'];
+        return $this->createProvider($bestProvider);
+    }
+
+    /**
+     * Calculate provider score based on requirements
+     */
+    private function calculateProviderScore(string $provider, array $requirements): int
+    {
+        $score = 0;
+        $capabilities = $this->getProviderCapabilities()[$provider] ?? [];
+        $budget = $requirements['budget_constraint'] ?? 'medium';
+
+        // Score based on cost preference
+        $cost = $capabilities['cost'] ?? 'paid';
+        if ($budget === 'low' && $cost === 'free') {
+            $score += 20;
+        } elseif ($budget === 'high' && $cost === 'paid') {
+            $score += 15;
+        } elseif ($budget === 'medium') {
+            $score += 10;
+        }
+
+        // Score based on auto-renewal capability
+        if ($capabilities['auto_renewal'] ?? false) {
+            $score += 15;
+        }
+
+        // Score based on provider priority from config
+        $providerConfig = config('ssl-enhanced.providers.' . $provider, []);
+        $priority = $providerConfig['priority'] ?? 999;
+        $score += max(0, 10 - $priority); // Lower priority number = higher score
+
+        // Score based on feature completeness
+        $features = $capabilities['features'] ?? [];
+        $score += count($features);
+
+        return $score;
+    }
+
+    /**
+     * Check if provider is available and configured
+     */
+    private function isProviderAvailable(string $provider): bool
+    {
+        $errors = $this->validateProviderConfig($provider);
+        return empty($errors);
+    }
+
+    /**
+     * Get provider health status for all providers
+     */
+    public function getProviderHealthStatus(): array
+    {
+        return $this->testAllProviders();
+    }
+
+    /**
+     * Validate domains across all available providers
+     */
+    public function validateDomainsAcrossProviders(array $domains): array
+    {
+        $results = [];
+        $availableProviders = $this->getProviderStatus()['available_providers'];
+
+        foreach ($availableProviders as $provider) {
+            try {
+                $providerInstance = $this->createProvider($provider);
+                if (method_exists($providerInstance, 'validateDomains')) {
+                    $results[$provider] = $providerInstance->validateDomains($domains);
+                } else {
+                    $results[$provider] = ['valid' => true, 'errors' => [], 'warnings' => []];
+                }
+            } catch (\Exception $e) {
+                $results[$provider] = [
+                    'valid' => false,
+                    'errors' => [$e->getMessage()],
+                    'warnings' => []
+                ];
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Get provider comparison matrix
+     */
+    public function getProviderComparison(): array
+    {
+        return $this->compareProviders();
+    }
+
+    /**
+     * Get provider recommendations based on usage patterns
+     */
+    public function getProviderRecommendations(): array
+    {
+        $availableProviders = $this->getProviderStatus()['available_providers'];
+        $recommendations = [];
+
+        foreach ($availableProviders as $provider) {
+            $capabilities = $this->getProviderCapabilities()[$provider] ?? [];
+            $providerInfo = $this->getAvailableProviders()[$provider] ?? [];
+
+            $recommendations[$provider] = [
+                'name' => $providerInfo['name'] ?? $provider,
+                'description' => $providerInfo['description'] ?? '',
+                'best_for' => $this->getProviderBestUseCase($provider),
+                'cost' => $capabilities['cost'] ?? 'unknown',
+                'auto_renewal' => $capabilities['auto_renewal'] ?? false,
+                'supported_types' => $capabilities['validation_types'] ?? [],
+                'features' => $providerInfo['features'] ?? []
+            ];
+        }
+
+        return $recommendations;
+    }
+
+    /**
+     * Get best use case for provider
+     */
+    private function getProviderBestUseCase(string $provider): array
+    {
+        return match ($provider) {
+            self::PROVIDER_GOGETSSL => [
+                'Traditional SSL needs',
+                'OV/EV certificates',
+                'Manual certificate management',
+                'Multi-vendor environments'
+            ],
+            self::PROVIDER_GOOGLE_CERTIFICATE_MANAGER => [
+                'Google Cloud deployments',
+                'Automatic certificate management',
+                'Load balancer integration',
+                'Zero-maintenance SSL'
+            ],
+            self::PROVIDER_LETS_ENCRYPT => [
+                'Cost-conscious deployments',
+                'Development environments',
+                'Automated certificate management',
+                'High-volume certificate needs'
+            ],
+            default => ['General SSL certificate needs']
+        };
+    }
 }
