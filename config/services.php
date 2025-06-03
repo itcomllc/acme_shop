@@ -35,4 +35,25 @@ return [
         ],
     ],
 
+    'square' => [
+        'application_id' => env('SQUARE_APPLICATION_ID'),
+        'access_token' => env('SQUARE_ACCESS_TOKEN', null),
+        'location_id' => env('SQUARE_LOCATION_ID'),
+        'webhook_secret' => env('SQUARE_WEBHOOK_SECRET'),
+        'environment' => env('SQUARE_ENVIRONMENT', 'sandbox'),
+        // 定期支払いプランID（Square Dashboard で事前作成）
+        'plan_basic' => env('SQUARE_PLAN_BASIC'),
+        'plan_professional' => env('SQUARE_PLAN_PROFESSIONAL'),
+        'plan_enterprise' => env('SQUARE_PLAN_ENTERPRISE'),
+    ],
+
+    'gogetssl' => [
+        'username' => env('GOGETSSL_USERNAME'),
+        'password' => env('GOGETSSL_PASSWORD'),
+        'base_url' => env('GOGETSSL_BASE_URL', 'https://my.gogetssl.com/api'),
+        'partner_code' => env('GOGETSSL_PARTNER_CODE'),
+        'timeout' => env('GOGETSSL_TIMEOUT', 30),
+        'sandbox' => env('GOGETSSL_SANDBOX', false),
+    ],
+
 ];
