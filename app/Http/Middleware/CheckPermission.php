@@ -5,14 +5,16 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{Auth, Log};
+use Symfony\Component\HttpFoundation\Response;
 
 class CheckPermission
 {
     /**
      * Handle an incoming request.
      */
-    public function handle(Request $request, Closure $next, string ...$permissions)
+    public function handle(Request $request, Closure $next, string ...$permissions): Response
     {
+        /** @var \App\Models\User */
         $user = Auth::user();
 
         if (!$user) {
@@ -46,7 +48,7 @@ class CheckPermission
     /**
      * Handle unauthorized access
      */
-    private function handleUnauthorized(Request $request, string $message)
+    private function handleUnauthorized(Request $request, string $message): Response
     {
         if ($request->expectsJson()) {
             return response()->json([

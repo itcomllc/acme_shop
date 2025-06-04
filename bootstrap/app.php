@@ -22,10 +22,23 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // エイリアスミドルウェアを登録
+        $middleware->alias([
+            'permission' => \App\Http\Middleware\CheckPermission::class,
+            'role' => \App\Http\Middleware\CheckRole::class,
+            'ssl.subscription.active' => \App\Http\Middleware\EnsureActiveSubscription::class,
+            'ssl.provider.available' => \App\Http\Middleware\EnsureProviderAvailable::class,
+        ]);
+        // グローバルミドルウェア
         $middleware->web(append: [
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
+            // 必要に応じてグローバルミドルウェアを追加
             // Livewire用のミドルウェア（必要に応じて）
             // \Livewire\Middleware\HydrationMiddleware::class,
+        ]);
+        // APIミドルウェア
+        $middleware->api(append: [
+            // API用のミドルウェアを追加
         ]);
 
         // SSL API用のレート制限
@@ -33,20 +46,6 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Webhook用のレート制限
         $middleware->throttleApi('webhooks:100,1');
-
-        // SSL関連のミドルウェア
-        $middleware->alias([
-            'ssl.subscription.active' => \App\Http\Middleware\EnsureActiveSubscription::class,
-            'ssl.provider.available' => \App\Http\Middleware\EnsureProviderAvailable::class,
-        ]);
-    })
-    ->withMiddleware(function (Middleware $middleware) {
-        $middleware->alias([
-            'role' => \App\Http\Middleware\CheckRole::class,
-            'permission' => \App\Http\Middleware\CheckPermission::class,
-            'ssl.subscription.active' => \App\Http\Middleware\EnsureActiveSubscription::class,
-            'ssl.provider.available' => \App\Http\Middleware\EnsureProviderAvailable::class,
-        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         // SSL関連の例外処理

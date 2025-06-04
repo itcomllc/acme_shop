@@ -4,7 +4,7 @@ namespace App\Models\Traits;
 
 use App\Models\{Role, Permission};
 use Illuminate\Database\Eloquent\Relations\{BelongsToMany, BelongsTo};
-use Illuminate\Support\Facades\{Cache, Log};
+use Illuminate\Support\Facades\{Cache, Log, Auth};
 use Illuminate\Support\Collection;
 
 trait HasRoles
@@ -40,7 +40,7 @@ trait HasRoles
     /**
      * Check if user has specific role
      */
-    public function hasRole(string $role): bool
+    public function hasRole($role): bool
     {
         if ($role instanceof Role) {
             return $this->roles()->where('id', $role->id)->exists();
@@ -156,7 +156,7 @@ trait HasRoles
         if (!$this->hasRole($role)) {
             $defaultPivotData = [
                 'assigned_at' => now(),
-                'assigned_by' => auth()->id()
+                'assigned_by' => Auth::id()
             ];
 
             $this->roles()->attach($role->id, array_merge($defaultPivotData, $pivotData));
@@ -166,7 +166,7 @@ trait HasRoles
             Log::info('Role assigned to user', [
                 'user_id' => $this->id,
                 'role' => $role->name,
-                'assigned_by' => auth()->id()
+                'assigned_by' => Auth::id()
             ]);
         }
     }
@@ -188,7 +188,7 @@ trait HasRoles
             Log::info('Role removed from user', [
                 'user_id' => $this->id,
                 'role' => $role->name,
-                'removed_by' => auth()->id()
+                'removed_by' => Auth::id()
             ]);
         }
     }
@@ -205,7 +205,7 @@ trait HasRoles
         Log::info('User roles synchronized', [
             'user_id' => $this->id,
             'role_count' => count($roleIds),
-            'updated_by' => auth()->id()
+            'updated_by' => Auth::id()
         ]);
     }
 
@@ -244,7 +244,7 @@ trait HasRoles
         $defaultPivotData = [
             'type' => $type,
             'assigned_at' => now(),
-            'assigned_by' => auth()->id()
+            'assigned_by' => Auth::id()
         ];
 
         $this->permissions()->syncWithoutDetaching([
@@ -257,7 +257,7 @@ trait HasRoles
             'user_id' => $this->id,
             'permission' => $permission->name,
             'type' => $type,
-            'assigned_by' => auth()->id()
+            'assigned_by' => Auth::id()
         ]);
     }
 
@@ -276,7 +276,7 @@ trait HasRoles
         Log::info('Permission removed from user', [
             'user_id' => $this->id,
             'permission' => $permission->name,
-            'removed_by' => auth()->id()
+            'removed_by' => Auth::id()
         ]);
     }
 

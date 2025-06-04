@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Admin\AdminControllerBase;
 use App\Models\{User, Role, Permission};
 use Illuminate\Http\{Request, JsonResponse};
 use Illuminate\Support\Facades\{Hash, Log, Auth, DB};
@@ -11,14 +11,8 @@ use Illuminate\Validation\Rules\Password;
 /**
  * Admin User Management Controller
  */
-class AdminUserController extends Controller
+class AdminUserController extends AdminControllerBase
 {
-    public function __construct()
-    {
-        $this->middleware('auth');
-        $this->middleware('permission:admin.access');
-    }
-
     /**
      * Display users management page
      */
@@ -132,8 +126,8 @@ class AdminUserController extends Controller
         ]);
 
         try {
-            DB::transaction(function () use ($request) {
-                $user = User::create([
+            $user = DB::transaction(function () use ($request) {
+                $newUser = User::create([
                     'name' => $request->name,
                     'email' => $request->email,
                     'password' => Hash::make($request->password),
@@ -141,17 +135,17 @@ class AdminUserController extends Controller
                 ]);
 
                 $role = Role::findOrFail($request->role_id);
-                $user->assignRole($role);
-                $user->setPrimaryRole($role);
+                $newUser->assignRole($role);
+                $newUser->setPrimaryRole($role);
 
                 Log::info('User created by admin', [
-                    'user_id' => $user->id,
-                    'email' => $user->email,
+                    'user_id' => $newUser->id,
+                    'email' => $newUser->email,
                     'role' => $role->name,
                     'created_by' => Auth::id()
                 ]);
 
-                return $user;
+                return $newUser;
             });
 
             return response()->json([
@@ -592,10 +586,8 @@ class AdminUserController extends Controller
     /**
      * Check if current user can perform action
      */
-    private function authorize(string $permission): void
+    protected function authorize(string $permission): void
     {
-        if (!Auth::user()->hasPermission($permission)) {
-            abort(403, 'Insufficient permissions');
-        }
+        parent::authorize($permission);
     }
 }

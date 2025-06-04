@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Admin\AdminControllerBase;
 use App\Models\{Role, Permission, User};
 use Illuminate\Http\{Request, JsonResponse};
 use Illuminate\Support\Facades\{Log, Auth, DB};
@@ -11,14 +11,8 @@ use Illuminate\Validation\Rule;
 /**
  * Admin Role Management Controller
  */
-class AdminRoleController extends Controller
+class AdminRoleController extends AdminControllerBase
 {
-    public function __construct()
-    {
-        $this->middleware('auth');
-        $this->middleware('permission:admin.access');
-    }
-
     /**
      * Display roles management page
      */
@@ -86,8 +80,8 @@ class AdminRoleController extends Controller
         ]);
 
         try {
-            DB::transaction(function () use ($request) {
-                $role = Role::create([
+            $role = DB::transaction(function () use ($request) {
+                $newRole = Role::create([
                     'name' => $request->name,
                     'display_name' => $request->display_name,
                     'description' => $request->description,
@@ -102,16 +96,16 @@ class AdminRoleController extends Controller
                 ]);
 
                 if ($request->has('permissions')) {
-                    $role->syncPermissions($request->permissions);
+                    $newRole->syncPermissions($request->permissions);
                 }
 
                 Log::info('Role created', [
-                    'role_id' => $role->id,
-                    'role_name' => $role->name,
+                    'role_id' => $newRole->id,
+                    'role_name' => $newRole->name,
                     'created_by' => Auth::id()
                 ]);
 
-                return $role;
+                return $newRole;
             });
 
             return response()->json([
@@ -119,6 +113,190 @@ class AdminRoleController extends Controller
                 'message' => 'Role created successfully',
                 'data' => $role->fresh(['permissions'])
             ], 201);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to create role', [
+                'error' => $e->getMessage(),
+                'user_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create role',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Update role
+     */
+    public function update(Role $role, Request $request): JsonResponse
+    {
+        $this->authorize('admin.roles.manage');
+
+        // Prevent modification of system roles
+        if ($role->isSystemRole()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'System roles cannot be modified'
+            ], 403);
+        }
+
+        $request->validate([
+            'display_name' => 'sometimes|required|string|max:100',
+            'description' => 'nullable|string|max:255',
+            'color' => 'sometimes|required|string|regex:/^#[0-9A-Fa-f]{6}$/',
+            'priority' => 'sometimes|required|integer|min:1|max:999',
+            'is_active' => 'sometimes|boolean',
+            'permissions' => 'nullable|array',
+            'permissions.*' => 'integer|exists:permissions,id'
+        ]);
+
+        try {
+            DB::transaction(function () use ($role, $request) {
+                $role->update($request->only([
+                    'display_name',
+                    'description', 
+                    'color',
+                    'priority',
+                    'is_active'
+                ]));
+
+                if ($request->has('permissions')) {
+                    $role->syncPermissions($request->permissions);
+                }
+
+                Log::info('Role updated', [
+                    'role_id' => $role->id,
+                    'role_name' => $role->name,
+                    'updated_by' => Auth::id()
+                ]);
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Role updated successfully',
+                'data' => $role->fresh(['permissions'])
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to update role', [
+                'role_id' => $role->id,
+                'error' => $e->getMessage(),
+                'user_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update role',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete role
+     */
+    public function destroy(Role $role): JsonResponse
+    {
+        $this->authorize('admin.roles.manage');
+
+        // Prevent deletion of system roles
+        if ($role->isSystemRole()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'System roles cannot be deleted'
+            ], 403);
+        }
+
+        // Check if role has users
+        if ($role->users()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot delete role that has assigned users',
+                'user_count' => $role->users()->count()
+            ], 422);
+        }
+
+        try {
+            DB::transaction(function () use ($role) {
+                $roleName = $role->name;
+                $role->delete();
+
+                Log::info('Role deleted', [
+                    'role_name' => $roleName,
+                    'deleted_by' => Auth::id()
+                ]);
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Role deleted successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to delete role', [
+                'role_id' => $role->id,
+                'error' => $e->getMessage(),
+                'user_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete role',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Assign role to user
+     */
+    public function assignToUser(Role $role, Request $request): JsonResponse
+    {
+        $this->authorize('admin.users.manage');
+
+        $request->validate([
+            'user_id' => 'required|integer|exists:users,id',
+            'expires_at' => 'nullable|date|after:now',
+            'notes' => 'nullable|string|max:255'
+        ]);
+
+        try {
+            $user = User::findOrFail($request->user_id);
+
+            // Check if user already has this role
+            if ($user->hasRole($role)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User already has this role'
+                ], 422);
+            }
+
+            $pivotData = [
+                'notes' => $request->notes
+            ];
+
+            if ($request->expires_at) {
+                $pivotData['expires_at'] = $request->expires_at;
+            }
+
+            $user->assignRole($role, $pivotData);
+
+            // Set as primary role if user doesn't have one
+            if (!$user->primary_role_id) {
+                $user->setPrimaryRole($role);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Role assigned to user successfully',
+                'data' => [
+                    'user' => $user->only(['id', 'name', 'email']),
+                    'role' => $role->only(['id', 'name', 'display_name'])
+                ]
+            ]);
 
         } catch (\Exception $e) {
             Log::error('Failed to assign role to user', [
@@ -343,194 +521,8 @@ class AdminRoleController extends Controller
     /**
      * Check if current user can perform action
      */
-    private function authorize(string $permission): void
+    protected function authorize(string $permission): void
     {
-        if (!Auth::user()->hasPermission($permission)) {
-            abort(403, 'Insufficient permissions');
-        }
+        parent::authorize($permission);
     }
-}Failed to create role', [
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create role',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Update role
-     */
-    public function update(Role $role, Request $request): JsonResponse
-    {
-        $this->authorize('admin.roles.manage');
-
-        // Prevent modification of system roles
-        if ($role->isSystemRole()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'System roles cannot be modified'
-            ], 403);
-        }
-
-        $request->validate([
-            'display_name' => 'sometimes|required|string|max:100',
-            'description' => 'nullable|string|max:255',
-            'color' => 'sometimes|required|string|regex:/^#[0-9A-Fa-f]{6}$/',
-            'priority' => 'sometimes|required|integer|min:1|max:999',
-            'is_active' => 'sometimes|boolean',
-            'permissions' => 'nullable|array',
-            'permissions.*' => 'integer|exists:permissions,id'
-        ]);
-
-        try {
-            DB::transaction(function () use ($role, $request) {
-                $role->update($request->only([
-                    'display_name',
-                    'description', 
-                    'color',
-                    'priority',
-                    'is_active'
-                ]));
-
-                if ($request->has('permissions')) {
-                    $role->syncPermissions($request->permissions);
-                }
-
-                Log::info('Role updated', [
-                    'role_id' => $role->id,
-                    'role_name' => $role->name,
-                    'updated_by' => Auth::id()
-                ]);
-            });
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Role updated successfully',
-                'data' => $role->fresh(['permissions'])
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Failed to update role', [
-                'role_id' => $role->id,
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update role',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Delete role
-     */
-    public function destroy(Role $role): JsonResponse
-    {
-        $this->authorize('admin.roles.manage');
-
-        // Prevent deletion of system roles
-        if ($role->isSystemRole()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'System roles cannot be deleted'
-            ], 403);
-        }
-
-        // Check if role has users
-        if ($role->users()->exists()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot delete role that has assigned users',
-                'user_count' => $role->users()->count()
-            ], 422);
-        }
-
-        try {
-            DB::transaction(function () use ($role) {
-                $roleName = $role->name;
-                $role->delete();
-
-                Log::info('Role deleted', [
-                    'role_name' => $roleName,
-                    'deleted_by' => Auth::id()
-                ]);
-            });
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Role deleted successfully'
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Failed to delete role', [
-                'role_id' => $role->id,
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete role',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Assign role to user
-     */
-    public function assignToUser(Role $role, Request $request): JsonResponse
-    {
-        $this->authorize('admin.users.manage');
-
-        $request->validate([
-            'user_id' => 'required|integer|exists:users,id',
-            'expires_at' => 'nullable|date|after:now',
-            'notes' => 'nullable|string|max:255'
-        ]);
-
-        try {
-            $user = User::findOrFail($request->user_id);
-
-            // Check if user already has this role
-            if ($user->hasRole($role)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User already has this role'
-                ], 422);
-            }
-
-            $pivotData = [
-                'notes' => $request->notes
-            ];
-
-            if ($request->expires_at) {
-                $pivotData['expires_at'] = $request->expires_at;
-            }
-
-            $user->assignRole($role, $pivotData);
-
-            // Set as primary role if user doesn't have one
-            if (!$user->primary_role_id) {
-                $user->setPrimaryRole($role);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Role assigned to user successfully',
-                'data' => [
-                    'user' => $user->only(['id', 'name', 'email']),
-                    'role' => $role->only(['id', 'name', 'display_name'])
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('
+}

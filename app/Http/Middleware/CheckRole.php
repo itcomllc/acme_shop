@@ -13,6 +13,7 @@ class CheckRole
      */
     public function handle(Request $request, Closure $next, string ...$roles)
     {
+        /** @var \App\Models\User */
         $user = Auth::user();
 
         if (!$user) {
