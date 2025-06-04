@@ -100,6 +100,14 @@ class Subscription extends Model
     }
 
     /**
+     * Get all EAB credentials for this subscription
+     */
+    public function eabCredentials(): HasMany
+    {
+        return $this->hasMany(EabCredential::class);
+    }
+
+    /**
      * Check if subscription is active
      */
     public function isActive(): bool

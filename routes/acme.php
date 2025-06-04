@@ -51,16 +51,3 @@ Route::prefix('acme')->name('acme.')->group(function () {
     Route::get('.well-known/acme-challenge/{token}', [AcmeChallengeController::class, 'httpChallenge'])
         ->name('http-challenge');
 });
-
-// EAB Management (Dashboard用)
-Route::middleware(['auth', 'ssl.subscription.active'])->prefix('ssl/eab')->name('ssl.eab.')->group(function () {
-    Route::get('/', function () {
-        return view('ssl.eab.index');
-    })->name('index');
-    
-    Route::post('generate', [\App\Http\Controllers\EabController::class, 'generate'])->name('generate');
-    Route::post('{credential}/revoke', [\App\Http\Controllers\EabController::class, 'revoke'])->name('revoke');
-    Route::get('instructions', function () {
-        return view('ssl.eab.instructions');
-    })->name('instructions');
-});

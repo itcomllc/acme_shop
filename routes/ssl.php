@@ -4,7 +4,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\{
     SSLController,
     SSLDashboardController,
-    SquareWebhookController
+    SquareWebhookController,
+    EabController  // 追加
 };
 use App\Http\Controllers\Admin\{
     AdminRoleController,
@@ -46,6 +47,15 @@ Route::middleware(['auth', 'verified'])->prefix('ssl')->name('ssl.')->group(func
     Route::get('/billing', function () {
         return view('billing.index');
     })->name('billing.index');
+    
+    // EAB Management (Web UI) - アクティブサブスクリプション必須
+    Route::middleware('ssl.subscription.active')->prefix('eab')->name('eab.')->group(function () {
+        Route::get('/', [EabController::class, 'index'])->name('index');
+        Route::post('generate', [EabController::class, 'generate'])->name('generate');
+        Route::post('{credential}/revoke', [EabController::class, 'revoke'])->name('revoke');
+        Route::get('instructions', [EabController::class, 'instructions'])->name('instructions');
+        Route::get('credentials/{credential}', [EabController::class, 'show'])->name('show');
+    });
     
     // Reports & Analytics
     Route::prefix('reports')->name('reports.')->group(function () {
