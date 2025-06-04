@@ -61,11 +61,11 @@ return [
 
         'gogetssl' => [
             'enabled' => env('GOGETSSL_ENABLED', false),
+            'priority' => 2,
             'api_key' => env('GOGETSSL_API_KEY'),
             'partner_code' => env('GOGETSSL_PARTNER_CODE'),
             'sandbox' => env('GOGETSSL_SANDBOX', true),
             'base_url' => env('GOGETSSL_BASE_URL', 'https://my.gogetssl.com/api'),
-            'priority' => 2,
             'auto_renewal' => true,
             'max_validity_days' => 365,
             'supported_types' => ['DV', 'OV', 'EV'],
@@ -83,10 +83,10 @@ return [
 
         'google_certificate_manager' => [
             'enabled' => env('GOOGLE_CM_ENABLED', true),
+            'priority' => 1,
             'project_id' => env('GOOGLE_CLOUD_PROJECT_ID'),
             'credentials' => env('GOOGLE_APPLICATION_CREDENTIALS'),
             'location' => env('GOOGLE_CM_LOCATION', 'global'),
-            'priority' => 1,
             'auto_renewal' => true,
             'max_validity_days' => 90,
             'supported_types' => ['DV'],
@@ -104,11 +104,11 @@ return [
 
         'lets_encrypt' => [
             'enabled' => env('LETS_ENCRYPT_ENABLED', true),
+            'priority' => 3,
             'directory_url' => env('LETS_ENCRYPT_DIRECTORY_URL', 'https://acme-v02.api.letsencrypt.org/directory'),
             'staging_url' => env('LETS_ENCRYPT_STAGING_URL', 'https://acme-staging-v02.api.letsencrypt.org/directory'),
             'staging' => env('LETS_ENCRYPT_STAGING', false),
             'contact_email' => env('LETS_ENCRYPT_CONTACT_EMAIL', 'admin@example.com'),
-            'priority' => 3,
             'auto_renewal' => true,
             'max_validity_days' => 90,
             'supported_types' => ['DV'],
@@ -124,6 +124,34 @@ return [
             'cost' => 'free',
         ],
 
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Plan Provider Mapping
+    |--------------------------------------------------------------------------
+    |
+    | Map subscription plans to default SSL providers and their preferences.
+    | Referenced in app/Models/Subscription.php
+    |
+    */
+
+    'plan_providers' => [
+        'basic' => [
+            'default' => 'google_certificate_manager',
+            'fallback' => ['lets_encrypt'],
+            'allowed' => ['google_certificate_manager', 'lets_encrypt'],
+        ],
+        'professional' => [
+            'default' => 'gogetssl',
+            'fallback' => ['google_certificate_manager', 'lets_encrypt'],
+            'allowed' => ['gogetssl', 'google_certificate_manager', 'lets_encrypt'],
+        ],
+        'enterprise' => [
+            'default' => 'gogetssl',
+            'fallback' => ['google_certificate_manager', 'lets_encrypt'],
+            'allowed' => ['gogetssl', 'google_certificate_manager', 'lets_encrypt'],
+        ],
     ],
 
     /*
@@ -148,6 +176,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Configuration for SSL certificate monitoring and alerting.
+    | Referenced in routes/console.php
     |
     */
 
@@ -165,6 +194,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Settings for provider failover and redundancy handling.
+    | Referenced in app/Jobs/ScheduleCertificateRenewal.php and routes/console.php
     |
     */
 
@@ -192,33 +222,6 @@ return [
         'challenge_retry_attempts' => env('ACME_CHALLENGE_RETRIES', 5),
         'challenge_retry_delay' => env('ACME_CHALLENGE_RETRY_DELAY', 30),
         'order_timeout' => env('ACME_ORDER_TIMEOUT', 3600), // 1 hour
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Plan Provider Mapping
-    |--------------------------------------------------------------------------
-    |
-    | Map subscription plans to default SSL providers and their preferences.
-    |
-    */
-
-    'plan_providers' => [
-        'basic' => [
-            'default' => 'google_certificate_manager',
-            'fallback' => ['lets_encrypt'],
-            'allowed' => ['google_certificate_manager', 'lets_encrypt'],
-        ],
-        'professional' => [
-            'default' => 'gogetssl',
-            'fallback' => ['google_certificate_manager', 'lets_encrypt'],
-            'allowed' => ['gogetssl', 'google_certificate_manager', 'lets_encrypt'],
-        ],
-        'enterprise' => [
-            'default' => 'gogetssl',
-            'fallback' => ['google_certificate_manager', 'lets_encrypt'],
-            'allowed' => ['gogetssl', 'google_certificate_manager', 'lets_encrypt'],
-        ],
     ],
 
     /*

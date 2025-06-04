@@ -35,6 +35,15 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Square Payment Service Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for Square payment processing and subscriptions
+    |
+    */
+
     'square' => [
         'application_id' => env('SQUARE_APPLICATION_ID'),
         'access_token' => env('SQUARE_ACCESS_TOKEN', null),
@@ -47,6 +56,15 @@ return [
         'plan_enterprise' => env('SQUARE_PLAN_ENTERPRISE'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | GoGetSSL Service Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for GoGetSSL certificate provider
+    |
+    */
+
     'gogetssl' => [
         'username' => env('GOGETSSL_USERNAME'),
         'password' => env('GOGETSSL_PASSWORD'),
@@ -56,10 +74,20 @@ return [
         'sandbox' => env('GOGETSSL_SANDBOX', false),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Google Cloud Services Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for Google Cloud services including Certificate Manager
+    |
+    */
+
     'google' => [
         'project_id' => env('GOOGLE_CLOUD_PROJECT_ID'),
         'key_file_path' => env('GOOGLE_APPLICATION_CREDENTIALS'),
         'key_data' => env('GOOGLE_SERVICE_ACCOUNT_KEY_JSON'),
+        'credentials' => env('GOOGLE_APPLICATION_CREDENTIALS'), // Referenced in CertificateProviderFactory
         
         'certificate_manager' => [
             'location' => env('GOOGLE_CERT_MANAGER_LOCATION', 'global'),

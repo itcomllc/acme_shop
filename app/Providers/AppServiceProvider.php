@@ -45,9 +45,9 @@ class AppServiceProvider extends ServiceProvider
     private function registerDevelopmentServices(): void
     {
         // Register development tools, debug providers, etc.
-        //if (class_exists(IdeHelperServiceProvider::class)) {
-        //    $this->app->register(IdeHelperServiceProvider::class);
-        //}
+        if (class_exists(IdeHelperServiceProvider::class)) {
+            $this->app->register(IdeHelperServiceProvider::class);
+        }
     }
 
     /**
