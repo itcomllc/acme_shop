@@ -26,56 +26,110 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
         ];
     }
 
-    /**
+   /**
      * Display users management page
      */
     public function index(Request $request)
     {
-        $query = User::with(['primaryRole', 'roles'])
-                    ->withCount(['subscriptions', 'roles']);
+        try {
+            $query = User::with(['primaryRole', 'roles'])
+                        ->withCount(['subscriptions', 'roles']);
 
-        // Apply filters
-        if ($request->has('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
-            });
-        }
-
-        if ($request->has('role')) {
-            $query->whereHas('roles', function ($q) use ($request) {
-                $q->where('name', $request->role);
-            });
-        }
-
-        if ($request->has('status')) {
-            switch ($request->status) {
-                case 'verified':
-                    $query->whereNotNull('email_verified_at');
-                    break;
-                case 'unverified':
-                    $query->whereNull('email_verified_at');
-                    break;
-                case 'active_subscription':
-                    $query->whereHas('subscriptions', function ($q) {
-                        $q->where('status', 'active');
-                    });
-                    break;
+            // Apply filters
+            if ($request->has('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('email', 'like', "%{$search}%");
+                });
             }
-        }
 
-        $users = $query->orderBy('created_at', 'desc')->paginate(20);
+            if ($request->has('role')) {
+                $query->whereHas('roles', function ($q) use ($request) {
+                    $q->where('name', $request->role);
+                });
+            }
 
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'data' => $users
+            if ($request->has('status')) {
+                switch ($request->status) {
+                    case 'verified':
+                        $query->whereNotNull('email_verified_at');
+                        break;
+                    case 'unverified':
+                        $query->whereNull('email_verified_at');
+                        break;
+                    case 'active_subscription':
+                        $query->whereHas('subscriptions', function ($q) {
+                            $q->where('status', 'active');
+                        });
+                        break;
+                }
+            }
+
+            $users = $query->orderBy('created_at', 'desc')->paginate(20);
+
+            if ($request->expectsJson()) {
+                // Transform the data for frontend consumption
+                $transformedUsers = $users->getCollection()->map(function ($user) {
+                    return [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'email_verified_at' => $user->email_verified_at,
+                        'created_at' => $user->created_at,
+                        'subscriptions_count' => $user->subscriptions_count ?? 0,
+                        'roles_count' => $user->roles_count ?? 0,
+                        'primary_role' => $user->primaryRole ? [
+                            'id' => $user->primaryRole->id,
+                            'name' => $user->primaryRole->name,
+                            'display_name' => $user->primaryRole->display_name,
+                            'color' => $user->primaryRole->color ?? '#3b82f6'
+                        ] : null,
+                        'roles' => $user->roles->map(function ($role) {
+                            return [
+                                'id' => $role->id,
+                                'name' => $role->name,
+                                'display_name' => $role->display_name,
+                                'color' => $role->color ?? '#3b82f6'
+                            ];
+                        })
+                    ];
+                });
+
+                return response()->json([
+                    'success' => true,
+                    'data' => $transformedUsers,
+                    'pagination' => [
+                        'current_page' => $users->currentPage(),
+                        'last_page' => $users->lastPage(),
+                        'per_page' => $users->perPage(),
+                        'total' => $users->total(),
+                        'from' => $users->firstItem(),
+                        'to' => $users->lastItem()
+                    ]
+                ]);
+            }
+
+            $roles = Role::active()->byPriority()->get();
+            return view('admin.users.index', compact('users', 'roles'));
+
+        } catch (\Exception $e) {
+            Log::error('Failed to load users in admin panel', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id()
             ]);
-        }
 
-        $roles = Role::active()->byPriority()->get();
-        return view('admin.users.index', compact('users', 'roles'));
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to load users',
+                    'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+                ], 500);
+            }
+
+            return back()->withErrors(['error' => 'Failed to load users: ' . $e->getMessage()]);
+        }
     }
 
     /**

@@ -28,58 +28,100 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
      */
     public function index(Request $request): View|JsonResponse
     {
-        $query = Role::with(['permissions', 'users']);
+        try {
+            $query = Role::with(['permissions', 'users']);
 
-        // Search functionality
-        if ($request->filled('search')) {
-            $search = $request->get('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('display_name', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+            // Search functionality
+            if ($request->filled('search')) {
+                $search = $request->get('search');
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('display_name', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            }
+
+            // Permission filter
+            if ($request->filled('permission')) {
+                $query->whereHas('permissions', function ($q) use ($request) {
+                    $q->where('name', $request->get('permission'));
+                });
+            }
+
+            // Sorting
+            $sortBy = $request->get('sort_by', 'created_at');
+            $sortDirection = $request->get('sort_direction', 'desc');
+            $query->orderBy($sortBy, $sortDirection);
+
+            // Pagination
+            $perPage = $request->get('per_page', 15);
+            $roles = $query->paginate($perPage);
+
+            // Add user counts
+            $roles->getCollection()->transform(function ($role) {
+                $role->users_count = $role->users->count();
+                $role->permissions_count = $role->permissions->count();
+                return $role;
             });
-        }
 
-        // Permission filter
-        if ($request->filled('permission')) {
-            $query->whereHas('permissions', function ($q) use ($request) {
-                $q->where('name', $request->get('permission'));
-            });
-        }
+            // Return JSON for AJAX requests
+            if ($request->expectsJson()) {
+                // Check if this is a request for permissions
+                if ($request->get('permissions') === '1') {
+                    $permissions = Permission::all();
+                    return response()->json([
+                        'success' => true,
+                        'data' => [
+                            'roles' => [
+                                'data' => $roles->items(),
+                                'pagination' => [
+                                    'current_page' => $roles->currentPage(),
+                                    'last_page' => $roles->lastPage(),
+                                    'per_page' => $roles->perPage(),
+                                    'total' => $roles->total(),
+                                ]
+                            ],
+                            'permissions' => $permissions->keyBy('id')
+                        ]
+                    ]);
+                }
 
-        // Sorting
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortDirection = $request->get('sort_direction', 'desc');
-        $query->orderBy($sortBy, $sortDirection);
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'roles' => [
+                            'data' => $roles->items(),
+                            'pagination' => [
+                                'current_page' => $roles->currentPage(),
+                                'last_page' => $roles->lastPage(),
+                                'per_page' => $roles->perPage(),
+                                'total' => $roles->total(),
+                            ]
+                        ]
+                    ]
+                ]);
+            }
 
-        // Pagination
-        $perPage = $request->get('per_page', 15);
-        $roles = $query->paginate($perPage);
+            $permissions = Permission::all();
 
-        // Add user counts
-        $roles->getCollection()->transform(function ($role) {
-            $role->users_count = $role->users->count();
-            $role->permissions_count = $role->permissions->count();
-            return $role;
-        });
-
-        // Return JSON for AJAX requests
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'data' => $roles->items(),
-                'pagination' => [
-                    'current_page' => $roles->currentPage(),
-                    'last_page' => $roles->lastPage(),
-                    'per_page' => $roles->perPage(),
-                    'total' => $roles->total(),
-                ]
+            return view('admin.roles.index', compact('roles', 'permissions'));
+        } catch (\Exception $e) {
+            Log::error('Failed to load roles in admin panel', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id()
             ]);
-        }
 
-        $permissions = Permission::all();
-        
-        return view('admin.roles.index', compact('roles', 'permissions'));
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to load roles',
+                    'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+                ], 500);
+            }
+
+            return back()->withErrors(['error' => 'Failed to load roles: ' . $e->getMessage()]);
+        }
     }
 
     /**
@@ -151,10 +193,9 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
 
             return redirect()->route('admin.roles.index')
                 ->with('success', 'Role created successfully');
-
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Failed to create role', [
                 'admin_id' => auth()->id(),
                 'error' => $e->getMessage()
@@ -205,7 +246,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
 
         $role->load('permissions');
         $permissions = Permission::all()->groupBy('category');
-        
+
         return view('admin.roles.edit', compact('role', 'permissions'));
     }
 
@@ -275,10 +316,9 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
 
             return redirect()->route('admin.roles.index')
                 ->with('success', 'Role updated successfully');
-
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Failed to update role', [
                 'admin_id' => auth()->id(),
                 'role_id' => $role->id,
@@ -328,10 +368,10 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
 
             $roleId = $role->id;
             $roleName = $role->name;
-            
+
             // Detach all permissions
             $role->permissions()->detach();
-            
+
             // Delete the role
             $role->delete();
 
@@ -352,10 +392,9 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
 
             return redirect()->route('admin.roles.index')
                 ->with('success', 'Role deleted successfully');
-
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Failed to delete role', [
                 'admin_id' => auth()->id(),
                 'role_id' => $role->id,
@@ -420,10 +459,9 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
                     'role' => $role
                 ]
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Failed to assign role to user', [
                 'admin_id' => auth()->id(),
                 'user_id' => $request->user_id,
@@ -485,10 +523,9 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
                     'role' => $role
                 ]
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Failed to remove role from user', [
                 'admin_id' => auth()->id(),
                 'user_id' => $request->user_id,
@@ -558,10 +595,9 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
                 'message' => "Successfully assigned role to {$updated} users",
                 'updated_count' => $updated
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             Log::error('Bulk role assignment failed', [
                 'admin_id' => auth()->id(),
                 'role_id' => $request->role_id,
@@ -583,8 +619,11 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
         try {
             $stats = [
                 'total_roles' => Role::count(),
-                'system_roles' => Role::where('is_system_role', true)->count(),
-                'custom_roles' => Role::where('is_system_role', false)->count(),
+                'active_roles' => Role::where('is_active', true)->count(),
+                'system_roles' => Role::where('metadata->system', true)->count(),
+                'custom_roles' => Role::where('metadata->system', '!=', true)->orWhereNull('metadata->system')->count(),
+                'total_users' => User::count(),
+                'total_permissions' => Permission::count(),
                 'role_usage' => $this->getRoleUsage(),
                 'permission_distribution' => $this->getPermissionDistribution(),
                 'most_assigned_roles' => $this->getMostAssignedRoles(),
@@ -594,15 +633,17 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
                 'success' => true,
                 'data' => $stats
             ]);
-
         } catch (\Exception $e) {
             Log::error('Failed to load role statistics', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id()
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to load statistics'
+                'message' => 'Failed to load statistics',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }
@@ -612,22 +653,20 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
      */
     private function getRoleUsage(): array
     {
-        return Role::select('roles.display_name as role')
-            ->selectRaw('COUNT(DISTINCT users.id) as user_count')
-            ->leftJoin('users', function ($join) {
-                $join->on('users.primary_role_id', '=', 'roles.id')
-                     ->orWhereExists(function ($query) {
-                         $query->select(DB::raw(1))
-                               ->from('role_user')
-                               ->whereRaw('role_user.role_id = roles.id')
-                               ->whereRaw('role_user.user_id = users.id');
-                     });
-            })
-            ->groupBy('roles.id', 'roles.display_name')
-            ->orderBy('user_count', 'desc')
-            ->get()
-            ->pluck('user_count', 'role')
-            ->toArray();
+        try {
+            return DB::table('roles')
+                ->select('roles.display_name as role')
+                ->selectRaw('COUNT(DISTINCT COALESCE(users.id, user_roles.user_id)) as user_count')
+                ->leftJoin('users', 'users.primary_role_id', '=', 'roles.id')
+                ->leftJoin('user_roles', 'user_roles.role_id', '=', 'roles.id')
+                ->groupBy('roles.id', 'roles.display_name')
+                ->orderBy('user_count', 'desc')
+                ->pluck('user_count', 'role')
+                ->toArray();
+        } catch (\Exception $e) {
+            Log::warning('Failed to get role usage statistics', ['error' => $e->getMessage()]);
+            return [];
+        }
     }
 
     /**
@@ -635,14 +674,19 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
      */
     private function getPermissionDistribution(): array
     {
-        return Permission::select('permissions.category')
-            ->selectRaw('COUNT(DISTINCT permission_role.role_id) as role_count')
-            ->leftJoin('permission_role', 'permissions.id', '=', 'permission_role.permission_id')
-            ->groupBy('permissions.category')
-            ->orderBy('role_count', 'desc')
-            ->get()
-            ->pluck('role_count', 'category')
-            ->toArray();
+        try {
+            return DB::table('permissions')
+                ->select('permissions.category')
+                ->selectRaw('COUNT(DISTINCT role_permissions.role_id) as role_count')
+                ->leftJoin('role_permissions', 'permissions.id', '=', 'role_permissions.permission_id')
+                ->groupBy('permissions.category')
+                ->orderBy('role_count', 'desc')
+                ->pluck('role_count', 'category')
+                ->toArray();
+        } catch (\Exception $e) {
+            Log::warning('Failed to get permission distribution', ['error' => $e->getMessage()]);
+            return [];
+        }
     }
 
     /**
@@ -650,27 +694,26 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
      */
     private function getMostAssignedRoles(): array
     {
-        return Role::select('roles.display_name as role')
-            ->selectRaw('COUNT(DISTINCT users.id) as assignment_count')
-            ->leftJoin('users', function ($join) {
-                $join->on('users.primary_role_id', '=', 'roles.id')
-                     ->orWhereExists(function ($query) {
-                         $query->select(DB::raw(1))
-                               ->from('role_user')
-                               ->whereRaw('role_user.role_id = roles.id')
-                               ->whereRaw('role_user.user_id = users.id');
-                     });
-            })
-            ->groupBy('roles.id', 'roles.display_name')
-            ->orderBy('assignment_count', 'desc')
-            ->limit(5)
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'role' => $item->role,
-                    'count' => $item->assignment_count
-                ];
-            })
-            ->toArray();
+        try {
+            return DB::table('roles')
+                ->select('roles.display_name as role')
+                ->selectRaw('COUNT(DISTINCT COALESCE(users.id, user_roles.user_id)) as assignment_count')
+                ->leftJoin('users', 'users.primary_role_id', '=', 'roles.id')
+                ->leftJoin('user_roles', 'user_roles.role_id', '=', 'roles.id')
+                ->groupBy('roles.id', 'roles.display_name')
+                ->orderBy('assignment_count', 'desc')
+                ->limit(5)
+                ->get()
+                ->map(function ($item) {
+                    return [
+                        'role' => $item->role,
+                        'count' => $item->assignment_count
+                    ];
+                })
+                ->toArray();
+        } catch (\Exception $e) {
+            Log::warning('Failed to get most assigned roles', ['error' => $e->getMessage()]);
+            return [];
+        }
     }
 }
