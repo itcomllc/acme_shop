@@ -4,312 +4,436 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Admin\AdminControllerBase;
 use App\Models\{Role, Permission, User};
-use Illuminate\Http\{Request, JsonResponse};
-use Illuminate\Support\Facades\{Log, Auth, DB};
+use Illuminate\Http\{Request, JsonResponse, RedirectResponse};
+use Illuminate\Routing\Controllers\{HasMiddleware, Middleware};
+use Illuminate\View\View;
+use Illuminate\Support\Facades\{DB, Log, Validator};
 use Illuminate\Validation\Rule;
 
-/**
- * Admin Role Management Controller
- */
-class AdminRoleController extends AdminControllerBase
+class AdminRoleController extends AdminControllerBase implements HasMiddleware
 {
     /**
-     * Display roles management page
+     * Get the middleware that should be assigned to the controller.
      */
-    public function index(Request $request)
+    public static function middleware(): array
     {
-        $roles = Role::with(['permissions'])
-                    ->withCount(['users', 'permissions'])
-                    ->byPriority()
-                    ->paginate(15);
+        return [
+            ...parent::middleware(),
+            new Middleware('permission:admin.roles.manage'),
+        ];
+    }
 
-        $permissions = Permission::active()
-                                ->orderBy('category')
-                                ->orderBy('display_name')
-                                ->get()
-                                ->groupBy('category');
+    /**
+     * Display a listing of roles
+     */
+    public function index(Request $request): View|JsonResponse
+    {
+        $query = Role::with(['permissions', 'users']);
 
+        // Search functionality
+        if ($request->filled('search')) {
+            $search = $request->get('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('display_name', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        // Permission filter
+        if ($request->filled('permission')) {
+            $query->whereHas('permissions', function ($q) use ($request) {
+                $q->where('name', $request->get('permission'));
+            });
+        }
+
+        // Sorting
+        $sortBy = $request->get('sort_by', 'created_at');
+        $sortDirection = $request->get('sort_direction', 'desc');
+        $query->orderBy($sortBy, $sortDirection);
+
+        // Pagination
+        $perPage = $request->get('per_page', 15);
+        $roles = $query->paginate($perPage);
+
+        // Add user counts
+        $roles->getCollection()->transform(function ($role) {
+            $role->users_count = $role->users->count();
+            $role->permissions_count = $role->permissions->count();
+            return $role;
+        });
+
+        // Return JSON for AJAX requests
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
-                'data' => [
-                    'roles' => $roles,
-                    'permissions' => $permissions
+                'data' => $roles->items(),
+                'pagination' => [
+                    'current_page' => $roles->currentPage(),
+                    'last_page' => $roles->lastPage(),
+                    'per_page' => $roles->perPage(),
+                    'total' => $roles->total(),
                 ]
             ]);
         }
 
+        $permissions = Permission::all();
+        
         return view('admin.roles.index', compact('roles', 'permissions'));
     }
 
     /**
-     * Show specific role details
+     * Show the form for creating a new role
      */
-    public function show(Role $role, Request $request): JsonResponse
+    public function create(): View
     {
-        $role->load(['permissions', 'users' => function ($query) {
-            $query->select('id', 'name', 'email')->limit(10);
-        }]);
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'role' => $role,
-                'display_info' => $role->getDisplayInfo(),
-                'recent_users' => $role->users,
-                'total_users' => $role->users()->count()
-            ]
-        ]);
+        $permissions = Permission::all()->groupBy('category');
+        return view('admin.roles.create', compact('permissions'));
     }
 
     /**
-     * Create new role
+     * Store a newly created role
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
-        $this->authorize('admin.roles.manage');
-
-        $request->validate([
-            'name' => 'required|string|max:50|unique:roles,name|regex:/^[a-z_]+$/',
-            'display_name' => 'required|string|max:100',
-            'description' => 'nullable|string|max:255',
-            'color' => 'required|string|regex:/^#[0-9A-Fa-f]{6}$/',
-            'priority' => 'required|integer|min:1|max:999',
-            'permissions' => 'nullable|array',
-            'permissions.*' => 'integer|exists:permissions,id'
+        $validator = Validator::make($request->all(), [
+            'name' => ['required', 'string', 'max:255', 'unique:roles', 'alpha_dash'],
+            'display_name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'permissions' => ['array'],
+            'permissions.*' => ['exists:permissions,id'],
+            'is_system_role' => ['boolean'],
         ]);
 
+        if ($validator->fails()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            return back()->withErrors($validator)->withInput();
+        }
+
         try {
-            $role = DB::transaction(function () use ($request) {
-                $newRole = Role::create([
-                    'name' => $request->name,
-                    'display_name' => $request->display_name,
-                    'description' => $request->description,
-                    'color' => $request->color,
-                    'priority' => $request->priority,
-                    'is_active' => true,
-                    'metadata' => [
-                        'created_by' => Auth::id(),
-                        'system' => false,
-                        'deletable' => true
-                    ]
+            DB::beginTransaction();
+
+            /** @var Role $role */
+            $role = Role::create([
+                'name' => $request->name,
+                'display_name' => $request->display_name,
+                'description' => $request->description,
+                'is_system_role' => $request->boolean('is_system_role', false),
+            ]);
+
+            // Attach permissions
+            if ($request->filled('permissions')) {
+                $role->permissions()->attach($request->permissions);
+            }
+
+            DB::commit();
+
+            Log::info('Role created by admin', [
+                'admin_id' => auth()->id(),
+                'role_id' => $role->id,
+                'role_name' => $role->name,
+                'permissions_count' => count($request->permissions ?? [])
+            ]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Role created successfully',
+                    'data' => $role->load('permissions')
                 ]);
+            }
 
-                if ($request->has('permissions')) {
-                    $newRole->syncPermissions($request->permissions);
-                }
-
-                Log::info('Role created', [
-                    'role_id' => $newRole->id,
-                    'role_name' => $newRole->name,
-                    'created_by' => Auth::id()
-                ]);
-
-                return $newRole;
-            });
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Role created successfully',
-                'data' => $role->fresh(['permissions'])
-            ], 201);
+            return redirect()->route('admin.roles.index')
+                ->with('success', 'Role created successfully');
 
         } catch (\Exception $e) {
+            DB::rollBack();
+            
             Log::error('Failed to create role', [
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id()
+                'admin_id' => auth()->id(),
+                'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create role',
-                'error' => $e->getMessage()
-            ], 500);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to create role'
+                ], 500);
+            }
+
+            return back()->with('error', 'Failed to create role')->withInput();
         }
     }
 
     /**
-     * Update role
+     * Display the specified role
      */
-    public function update(Role $role, Request $request): JsonResponse
+    public function show(Role $role): View|JsonResponse
     {
-        $this->authorize('admin.roles.manage');
-
-        // Prevent modification of system roles
-        if ($role->isSystemRole()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'System roles cannot be modified'
-            ], 403);
-        }
-
-        $request->validate([
-            'display_name' => 'sometimes|required|string|max:100',
-            'description' => 'nullable|string|max:255',
-            'color' => 'sometimes|required|string|regex:/^#[0-9A-Fa-f]{6}$/',
-            'priority' => 'sometimes|required|integer|min:1|max:999',
-            'is_active' => 'sometimes|boolean',
-            'permissions' => 'nullable|array',
-            'permissions.*' => 'integer|exists:permissions,id'
+        $role->load([
+            'permissions',
+            'users' => function ($query) {
+                $query->select('id', 'name', 'email', 'created_at');
+            }
         ]);
 
-        try {
-            DB::transaction(function () use ($role, $request) {
-                $role->update($request->only([
-                    'display_name',
-                    'description', 
-                    'color',
-                    'priority',
-                    'is_active'
-                ]));
-
-                if ($request->has('permissions')) {
-                    $role->syncPermissions($request->permissions);
-                }
-
-                Log::info('Role updated', [
-                    'role_id' => $role->id,
-                    'role_name' => $role->name,
-                    'updated_by' => Auth::id()
-                ]);
-            });
-
+        if (request()->expectsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => 'Role updated successfully',
-                'data' => $role->fresh(['permissions'])
+                'data' => $role
             ]);
+        }
+
+        return view('admin.roles.show', compact('role'));
+    }
+
+    /**
+     * Show the form for editing the role
+     */
+    public function edit(Role $role): View
+    {
+        // Prevent editing system roles
+        if ($role->is_system_role) {
+            abort(403, 'System roles cannot be edited');
+        }
+
+        $role->load('permissions');
+        $permissions = Permission::all()->groupBy('category');
+        
+        return view('admin.roles.edit', compact('role', 'permissions'));
+    }
+
+    /**
+     * Update the specified role
+     */
+    public function update(Request $request, Role $role): RedirectResponse|JsonResponse
+    {
+        // Prevent updating system roles
+        if ($role->is_system_role) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'System roles cannot be updated'
+                ], 403);
+            }
+            return back()->with('error', 'System roles cannot be updated');
+        }
+
+        $validator = Validator::make($request->all(), [
+            'name' => ['required', 'string', 'max:255', Rule::unique('roles')->ignore($role->id), 'alpha_dash'],
+            'display_name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'permissions' => ['array'],
+            'permissions.*' => ['exists:permissions,id'],
+        ]);
+
+        if ($validator->fails()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            return back()->withErrors($validator)->withInput();
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $role->update([
+                'name' => $request->name,
+                'display_name' => $request->display_name,
+                'description' => $request->description,
+            ]);
+
+            // Sync permissions
+            $role->permissions()->sync($request->permissions ?? []);
+
+            DB::commit();
+
+            Log::info('Role updated by admin', [
+                'admin_id' => auth()->id(),
+                'role_id' => $role->id,
+                'role_name' => $role->name,
+                'permissions_count' => count($request->permissions ?? [])
+            ]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Role updated successfully',
+                    'data' => $role->fresh(['permissions'])
+                ]);
+            }
+
+            return redirect()->route('admin.roles.index')
+                ->with('success', 'Role updated successfully');
 
         } catch (\Exception $e) {
+            DB::rollBack();
+            
             Log::error('Failed to update role', [
+                'admin_id' => auth()->id(),
                 'role_id' => $role->id,
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id()
+                'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update role',
-                'error' => $e->getMessage()
-            ], 500);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to update role'
+                ], 500);
+            }
+
+            return back()->with('error', 'Failed to update role')->withInput();
         }
     }
 
     /**
-     * Delete role
+     * Remove the specified role
      */
-    public function destroy(Role $role): JsonResponse
+    public function destroy(Role $role): RedirectResponse|JsonResponse
     {
-        $this->authorize('admin.roles.manage');
-
         // Prevent deletion of system roles
-        if ($role->isSystemRole()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'System roles cannot be deleted'
-            ], 403);
+        if ($role->is_system_role) {
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'System roles cannot be deleted'
+                ], 403);
+            }
+            return back()->with('error', 'System roles cannot be deleted');
         }
 
-        // Check if role has users
-        if ($role->users()->exists()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot delete role that has assigned users',
-                'user_count' => $role->users()->count()
-            ], 422);
+        // Check if role is assigned to users
+        if ($role->users()->count() > 0) {
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot delete role that is assigned to users'
+                ], 422);
+            }
+            return back()->with('error', 'Cannot delete role that is assigned to users');
         }
 
         try {
-            DB::transaction(function () use ($role) {
-                $roleName = $role->name;
-                $role->delete();
+            DB::beginTransaction();
 
-                Log::info('Role deleted', [
-                    'role_name' => $roleName,
-                    'deleted_by' => Auth::id()
-                ]);
-            });
+            $roleId = $role->id;
+            $roleName = $role->name;
+            
+            // Detach all permissions
+            $role->permissions()->detach();
+            
+            // Delete the role
+            $role->delete();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Role deleted successfully'
+            DB::commit();
+
+            Log::info('Role deleted by admin', [
+                'admin_id' => auth()->id(),
+                'deleted_role_id' => $roleId,
+                'deleted_role_name' => $roleName
             ]);
+
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Role deleted successfully'
+                ]);
+            }
+
+            return redirect()->route('admin.roles.index')
+                ->with('success', 'Role deleted successfully');
 
         } catch (\Exception $e) {
+            DB::rollBack();
+            
             Log::error('Failed to delete role', [
+                'admin_id' => auth()->id(),
                 'role_id' => $role->id,
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id()
+                'error' => $e->getMessage()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete role',
-                'error' => $e->getMessage()
-            ], 500);
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to delete role'
+                ], 500);
+            }
+
+            return back()->with('error', 'Failed to delete role');
         }
     }
 
     /**
      * Assign role to user
      */
-    public function assignToUser(Role $role, Request $request): JsonResponse
+    public function assignToUser(Request $request, Role $role): JsonResponse
     {
-        $this->authorize('admin.users.manage');
-
-        $request->validate([
-            'user_id' => 'required|integer|exists:users,id',
-            'expires_at' => 'nullable|date|after:now',
-            'notes' => 'nullable|string|max:255'
+        $validator = Validator::make($request->all(), [
+            'user_id' => ['required', 'exists:users,id'],
+            'is_primary' => ['boolean']
         ]);
 
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
         try {
+            DB::beginTransaction();
+
+            /** @var User $user */
             $user = User::findOrFail($request->user_id);
 
-            // Check if user already has this role
-            if ($user->hasRole($role)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User already has this role'
-                ], 422);
+            if ($request->boolean('is_primary')) {
+                $user->update(['primary_role_id' => $role->id]);
+            } else {
+                $user->roles()->syncWithoutDetaching([$role->id]);
             }
 
-            $pivotData = [
-                'notes' => $request->notes
-            ];
+            DB::commit();
 
-            if ($request->expires_at) {
-                $pivotData['expires_at'] = $request->expires_at;
-            }
-
-            $user->assignRole($role, $pivotData);
-
-            // Set as primary role if user doesn't have one
-            if (!$user->primary_role_id) {
-                $user->setPrimaryRole($role);
-            }
+            Log::info('Role assigned to user by admin', [
+                'admin_id' => auth()->id(),
+                'user_id' => $user->id,
+                'role_id' => $role->id,
+                'is_primary' => $request->boolean('is_primary')
+            ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Role assigned to user successfully',
+                'message' => 'Role assigned successfully',
                 'data' => [
-                    'user' => $user->only(['id', 'name', 'email']),
-                    'role' => $role->only(['id', 'name', 'display_name'])
+                    'user' => $user->fresh(['primaryRole', 'roles']),
+                    'role' => $role
                 ]
             ]);
 
         } catch (\Exception $e) {
+            DB::rollBack();
+            
             Log::error('Failed to assign role to user', [
-                'role_id' => $role->id,
+                'admin_id' => auth()->id(),
                 'user_id' => $request->user_id,
-                'error' => $e->getMessage(),
-                'assigned_by' => Auth::id()
+                'role_id' => $role->id,
+                'error' => $e->getMessage()
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to assign role to user',
-                'error' => $e->getMessage()
+                'message' => 'Failed to assign role'
             ], 500);
         }
     }
@@ -317,59 +441,136 @@ class AdminRoleController extends AdminControllerBase
     /**
      * Remove role from user
      */
-    public function removeFromUser(Role $role, Request $request): JsonResponse
+    public function removeFromUser(Request $request, Role $role): JsonResponse
     {
-        $this->authorize('admin.users.manage');
-
-        $request->validate([
-            'user_id' => 'required|integer|exists:users,id'
+        $validator = Validator::make($request->all(), [
+            'user_id' => ['required', 'exists:users,id'],
         ]);
 
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
         try {
+            DB::beginTransaction();
+
+            /** @var User $user */
             $user = User::findOrFail($request->user_id);
 
-            if (!$user->hasRole($role)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User does not have this role'
-                ], 422);
-            }
-
-            // Prevent removing the last role from user
-            if ($user->roles()->count() === 1) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot remove the last role from user'
-                ], 422);
-            }
-
-            $user->removeRole($role);
-
-            // If this was the primary role, set a new primary role
+            // If it's the primary role, clear it
             if ($user->primary_role_id === $role->id) {
-                $newPrimaryRole = $user->getHighestPriorityRole();
-                if ($newPrimaryRole) {
-                    $user->setPrimaryRole($newPrimaryRole);
-                }
+                $user->update(['primary_role_id' => null]);
             }
+
+            // Remove from additional roles
+            $user->roles()->detach($role->id);
+
+            DB::commit();
+
+            Log::info('Role removed from user by admin', [
+                'admin_id' => auth()->id(),
+                'user_id' => $user->id,
+                'role_id' => $role->id
+            ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Role removed from user successfully'
+                'message' => 'Role removed successfully',
+                'data' => [
+                    'user' => $user->fresh(['primaryRole', 'roles']),
+                    'role' => $role
+                ]
             ]);
 
         } catch (\Exception $e) {
+            DB::rollBack();
+            
             Log::error('Failed to remove role from user', [
-                'role_id' => $role->id,
+                'admin_id' => auth()->id(),
                 'user_id' => $request->user_id,
-                'error' => $e->getMessage(),
-                'removed_by' => Auth::id()
+                'role_id' => $role->id,
+                'error' => $e->getMessage()
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to remove role from user',
+                'message' => 'Failed to remove role'
+            ], 500);
+        }
+    }
+
+    /**
+     * Bulk assign roles
+     */
+    public function bulkAssign(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'role_id' => ['required', 'exists:roles,id'],
+            'user_ids' => ['required', 'array'],
+            'user_ids.*' => ['exists:users,id'],
+            'is_primary' => ['boolean']
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $role = Role::findOrFail($request->role_id);
+            $userIds = $request->user_ids;
+            $isPrimary = $request->boolean('is_primary');
+            $updated = 0;
+
+            foreach ($userIds as $userId) {
+                $user = User::find($userId);
+                if (!$user) continue;
+
+                if ($isPrimary) {
+                    $user->update(['primary_role_id' => $role->id]);
+                } else {
+                    $user->roles()->syncWithoutDetaching([$role->id]);
+                }
+
+                $updated++;
+            }
+
+            DB::commit();
+
+            Log::info('Bulk role assignment by admin', [
+                'admin_id' => auth()->id(),
+                'role_id' => $role->id,
+                'user_count' => $updated,
+                'is_primary' => $isPrimary
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Successfully assigned role to {$updated} users",
+                'updated_count' => $updated
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Bulk role assignment failed', [
+                'admin_id' => auth()->id(),
+                'role_id' => $request->role_id,
                 'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Bulk assignment failed'
             ], 500);
         }
     }
@@ -377,38 +578,16 @@ class AdminRoleController extends AdminControllerBase
     /**
      * Get role statistics
      */
-    public function statistics(): JsonResponse
+    public function statistics(Request $request): JsonResponse
     {
         try {
             $stats = [
                 'total_roles' => Role::count(),
-                'active_roles' => Role::active()->count(),
-                'system_roles' => Role::whereIn('name', [
-                    Role::SUPER_ADMIN,
-                    Role::ADMIN,
-                    Role::USER
-                ])->count(),
-                'custom_roles' => Role::whereNotIn('name', [
-                    Role::SUPER_ADMIN,
-                    Role::ADMIN,
-                    Role::USER
-                ])->count(),
-                'role_distribution' => Role::withCount('users')
-                                         ->get()
-                                         ->map(function ($role) {
-                                             return [
-                                                 'role' => $role->display_name,
-                                                 'users' => $role->users_count,
-                                                 'color' => $role->color
-                                             ];
-                                         }),
-                'recent_assignments' => DB::table('user_roles')
-                                         ->join('users', 'user_roles.user_id', '=', 'users.id')
-                                         ->join('roles', 'user_roles.role_id', '=', 'roles.id')
-                                         ->select('users.name as user_name', 'roles.display_name as role_name', 'user_roles.assigned_at')
-                                         ->orderBy('user_roles.assigned_at', 'desc')
-                                         ->limit(10)
-                                         ->get()
+                'system_roles' => Role::where('is_system_role', true)->count(),
+                'custom_roles' => Role::where('is_system_role', false)->count(),
+                'role_usage' => $this->getRoleUsage(),
+                'permission_distribution' => $this->getPermissionDistribution(),
+                'most_assigned_roles' => $this->getMostAssignedRoles(),
             ];
 
             return response()->json([
@@ -417,112 +596,81 @@ class AdminRoleController extends AdminControllerBase
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Failed to get role statistics', [
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id()
+            Log::error('Failed to load role statistics', [
+                'error' => $e->getMessage()
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to get statistics',
-                'error' => $e->getMessage()
+                'message' => 'Failed to load statistics'
             ], 500);
         }
     }
 
     /**
-     * Bulk assign roles to users
+     * Get role usage statistics
      */
-    public function bulkAssign(Request $request): JsonResponse
+    private function getRoleUsage(): array
     {
-        $this->authorize('admin.users.manage');
-
-        $request->validate([
-            'user_ids' => 'required|array|max:100',
-            'user_ids.*' => 'integer|exists:users,id',
-            'role_id' => 'required|integer|exists:roles,id',
-            'notes' => 'nullable|string|max:255'
-        ]);
-
-        try {
-            $role = Role::findOrFail($request->role_id);
-            $users = User::whereIn('id', $request->user_ids)->get();
-            $results = [];
-
-            DB::transaction(function () use ($users, $role, $request, &$results) {
-                foreach ($users as $user) {
-                    try {
-                        if (!$user->hasRole($role)) {
-                            $user->assignRole($role, [
-                                'notes' => $request->notes
-                            ]);
-                            $results[] = [
-                                'user_id' => $user->id,
-                                'user_name' => $user->name,
-                                'status' => 'assigned'
-                            ];
-                        } else {
-                            $results[] = [
-                                'user_id' => $user->id,
-                                'user_name' => $user->name,
-                                'status' => 'already_has_role'
-                            ];
-                        }
-                    } catch (\Exception $e) {
-                        $results[] = [
-                            'user_id' => $user->id,
-                            'user_name' => $user->name,
-                            'status' => 'failed',
-                            'error' => $e->getMessage()
-                        ];
-                    }
-                }
-            });
-
-            $assigned = collect($results)->where('status', 'assigned')->count();
-            $skipped = collect($results)->where('status', 'already_has_role')->count();
-            $failed = collect($results)->where('status', 'failed')->count();
-
-            Log::info('Bulk role assignment completed', [
-                'role_id' => $role->id,
-                'assigned' => $assigned,
-                'skipped' => $skipped,
-                'failed' => $failed,
-                'performed_by' => Auth::id()
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => "Bulk assignment completed. Assigned: {$assigned}, Skipped: {$skipped}, Failed: {$failed}",
-                'data' => [
-                    'results' => $results,
-                    'summary' => [
-                        'assigned' => $assigned,
-                        'skipped' => $skipped,
-                        'failed' => $failed
-                    ]
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Bulk role assignment failed', [
-                'error' => $e->getMessage(),
-                'user_id' => Auth::id()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Bulk assignment failed',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return Role::select('roles.display_name as role')
+            ->selectRaw('COUNT(DISTINCT users.id) as user_count')
+            ->leftJoin('users', function ($join) {
+                $join->on('users.primary_role_id', '=', 'roles.id')
+                     ->orWhereExists(function ($query) {
+                         $query->select(DB::raw(1))
+                               ->from('role_user')
+                               ->whereRaw('role_user.role_id = roles.id')
+                               ->whereRaw('role_user.user_id = users.id');
+                     });
+            })
+            ->groupBy('roles.id', 'roles.display_name')
+            ->orderBy('user_count', 'desc')
+            ->get()
+            ->pluck('user_count', 'role')
+            ->toArray();
     }
 
     /**
-     * Check if current user can perform action
+     * Get permission distribution
      */
-    protected function authorize(string $permission): void
+    private function getPermissionDistribution(): array
     {
-        parent::authorize($permission);
+        return Permission::select('permissions.category')
+            ->selectRaw('COUNT(DISTINCT permission_role.role_id) as role_count')
+            ->leftJoin('permission_role', 'permissions.id', '=', 'permission_role.permission_id')
+            ->groupBy('permissions.category')
+            ->orderBy('role_count', 'desc')
+            ->get()
+            ->pluck('role_count', 'category')
+            ->toArray();
+    }
+
+    /**
+     * Get most assigned roles
+     */
+    private function getMostAssignedRoles(): array
+    {
+        return Role::select('roles.display_name as role')
+            ->selectRaw('COUNT(DISTINCT users.id) as assignment_count')
+            ->leftJoin('users', function ($join) {
+                $join->on('users.primary_role_id', '=', 'roles.id')
+                     ->orWhereExists(function ($query) {
+                         $query->select(DB::raw(1))
+                               ->from('role_user')
+                               ->whereRaw('role_user.role_id = roles.id')
+                               ->whereRaw('role_user.user_id = users.id');
+                     });
+            })
+            ->groupBy('roles.id', 'roles.display_name')
+            ->orderBy('assignment_count', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'role' => $item->role,
+                    'count' => $item->assignment_count
+                ];
+            })
+            ->toArray();
     }
 }

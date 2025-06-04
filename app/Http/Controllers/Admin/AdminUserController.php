@@ -4,22 +4,33 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Admin\AdminControllerBase;
 use App\Models\{User, Role, Permission};
-use Illuminate\Http\{Request, JsonResponse};
+use Illuminate\Http\{Request, JsonResponse, RedirectResponse};
 use Illuminate\Support\Facades\{Hash, Log, Auth, DB};
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Routing\Controllers\{HasMiddleware, Middleware};
 
 /**
  * Admin User Management Controller
  */
-class AdminUserController extends AdminControllerBase
+class AdminUserController extends AdminControllerBase implements HasMiddleware
 {
+    /**
+     * Get the middleware that should be assigned to the controller.
+     */
+    public static function middleware(): array
+    {
+        return [
+            ...parent::middleware(),
+            new Middleware('permission:users.view_all', only: ['index', 'show']),
+            new Middleware('permission:admin.users.manage', only: ['store', 'update', 'destroy', 'assignRole', 'removeRole', 'bulkUpdate']),
+        ];
+    }
+
     /**
      * Display users management page
      */
     public function index(Request $request)
     {
-        $this->authorize('users.view_all');
-
         $query = User::with(['primaryRole', 'roles'])
                     ->withCount(['subscriptions', 'roles']);
 
@@ -68,12 +79,19 @@ class AdminUserController extends AdminControllerBase
     }
 
     /**
+     * Show the form for creating a new user
+     */
+    public function create()
+    {
+        $roles = Role::active()->byPriority()->get();
+        return view('admin.users.create', compact('roles'));
+    }
+
+    /**
      * Show specific user details
      */
-    public function show(User $user, Request $request): JsonResponse
+    public function show(User $user, Request $request)
     {
-        $this->authorize('users.view_all');
-
         $user->load([
             'roles.permissions',
             'permissions',
@@ -92,31 +110,33 @@ class AdminUserController extends AdminControllerBase
             'account_age_days' => $user->created_at->diffInDays(now()),
         ];
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'user' => $user,
-                'role_info' => $user->getRoleDisplayInfo(),
-                'stats' => $userStats,
-                'permissions' => $user->getAllPermissions()->map(function ($permission) {
-                    return [
-                        'name' => $permission->name,
-                        'display_name' => $permission->display_name,
-                        'category' => $permission->category,
-                        'source' => 'role' // or 'direct' for direct assignments
-                    ];
-                })
-            ]
-        ]);
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'user' => $user,
+                    'role_info' => $user->getRoleDisplayInfo(),
+                    'stats' => $userStats,
+                    'permissions' => $user->getAllPermissions()->map(function ($permission) {
+                        return [
+                            'name' => $permission->name,
+                            'display_name' => $permission->display_name,
+                            'category' => $permission->category,
+                            'source' => 'role' // or 'direct' for direct assignments
+                        ];
+                    })
+                ]
+            ]);
+        }
+
+        return view('admin.users.show', compact('user', 'userStats'));
     }
 
     /**
-     * Create new user
+     * Store a newly created user
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request)
     {
-        $this->authorize('admin.users.manage');
-
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
@@ -148,11 +168,16 @@ class AdminUserController extends AdminControllerBase
                 return $newUser;
             });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'User created successfully',
-                'data' => $user->fresh(['primaryRole', 'roles'])
-            ], 201);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'User created successfully',
+                    'data' => $user->fresh(['primaryRole', 'roles'])
+                ], 201);
+            }
+
+            return redirect()->route('admin.users.index')
+                           ->with('success', 'User created successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to create user', [
@@ -160,27 +185,41 @@ class AdminUserController extends AdminControllerBase
                 'admin_id' => Auth::id()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create user',
-                'error' => $e->getMessage()
-            ], 500);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to create user',
+                    'error' => $e->getMessage()
+                ], 500);
+            }
+
+            return back()->withErrors(['error' => 'Failed to create user: ' . $e->getMessage()]);
         }
+    }
+
+    /**
+     * Show the form for editing the specified user
+     */
+    public function edit(User $user)
+    {
+        $roles = Role::active()->byPriority()->get();
+        return view('admin.users.edit', compact('user', 'roles'));
     }
 
     /**
      * Update user
      */
-    public function update(User $user, Request $request): JsonResponse
+    public function update(User $user, Request $request)
     {
-        $this->authorize('users.edit');
-
         // Prevent self-modification of critical data
         if ($user->id === Auth::id()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot modify your own account through admin panel'
-            ], 403);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot modify your own account through admin panel'
+                ], 403);
+            }
+            return back()->withErrors(['error' => 'Cannot modify your own account through admin panel']);
         }
 
         $request->validate([
@@ -223,11 +262,16 @@ class AdminUserController extends AdminControllerBase
                 ]);
             });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'User updated successfully',
-                'data' => $user->fresh(['primaryRole', 'roles'])
-            ]);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'User updated successfully',
+                    'data' => $user->fresh(['primaryRole', 'roles'])
+                ]);
+            }
+
+            return redirect()->route('admin.users.index')
+                           ->with('success', 'User updated successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to update user', [
@@ -236,45 +280,57 @@ class AdminUserController extends AdminControllerBase
                 'admin_id' => Auth::id()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update user',
-                'error' => $e->getMessage()
-            ], 500);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to update user',
+                    'error' => $e->getMessage()
+                ], 500);
+            }
+
+            return back()->withErrors(['error' => 'Failed to update user: ' . $e->getMessage()]);
         }
     }
 
     /**
      * Delete user
      */
-    public function destroy(User $user): JsonResponse
+    public function destroy(User $user, Request $request)
     {
-        $this->authorize('users.delete');
-
         // Prevent self-deletion
         if ($user->id === Auth::id()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot delete your own account'
-            ], 403);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot delete your own account'
+                ], 403);
+            }
+            return back()->withErrors(['error' => 'Cannot delete your own account']);
         }
 
         // Prevent deletion of super admin
         if ($user->isSuperAdmin()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot delete super admin account'
-            ], 403);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot delete super admin account'
+                ], 403);
+            }
+            return back()->withErrors(['error' => 'Cannot delete super admin account']);
         }
 
         // Check for active subscriptions
         $activeSubscriptions = $user->subscriptions()->where('status', 'active')->count();
         if ($activeSubscriptions > 0) {
-            return response()->json([
-                'success' => false,
-                'message' => "Cannot delete user with {$activeSubscriptions} active subscription(s)",
-                'active_subscriptions' => $activeSubscriptions
-            ], 422);
+            $message = "Cannot delete user with {$activeSubscriptions} active subscription(s)";
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'active_subscriptions' => $activeSubscriptions
+                ], 422);
+            }
+            return back()->withErrors(['error' => $message]);
         }
 
         try {
@@ -292,10 +348,15 @@ class AdminUserController extends AdminControllerBase
                 ]);
             });
 
-            return response()->json([
-                'success' => true,
-                'message' => 'User deleted successfully'
-            ]);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'User deleted successfully'
+                ]);
+            }
+
+            return redirect()->route('admin.users.index')
+                           ->with('success', 'User deleted successfully');
 
         } catch (\Exception $e) {
             Log::error('Failed to delete user', [
@@ -304,11 +365,15 @@ class AdminUserController extends AdminControllerBase
                 'admin_id' => Auth::id()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete user',
-                'error' => $e->getMessage()
-            ], 500);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to delete user',
+                    'error' => $e->getMessage()
+                ], 500);
+            }
+
+            return back()->withErrors(['error' => 'Failed to delete user: ' . $e->getMessage()]);
         }
     }
 
@@ -317,8 +382,6 @@ class AdminUserController extends AdminControllerBase
      */
     public function assignRole(User $user, Request $request): JsonResponse
     {
-        $this->authorize('admin.users.manage');
-
         $request->validate([
             'role_id' => 'required|integer|exists:roles,id',
             'set_as_primary' => 'boolean',
@@ -370,8 +433,6 @@ class AdminUserController extends AdminControllerBase
      */
     public function removeRole(User $user, Role $role): JsonResponse
     {
-        $this->authorize('admin.users.manage');
-
         if (!$user->hasRole($role)) {
             return response()->json([
                 'success' => false,
@@ -426,23 +487,65 @@ class AdminUserController extends AdminControllerBase
     public function statistics(): JsonResponse
     {
         try {
-            $stats = [
-                'total_users' => User::count(),
-                'verified_users' => User::whereNotNull('email_verified_at')->count(),
-                'users_with_subscriptions' => User::whereHas('subscriptions')->count(),
-                'users_with_active_subscriptions' => User::whereHas('subscriptions', function ($q) {
+            // Get basic user counts
+            $totalUsers = User::count();
+            $verifiedUsers = User::whereNotNull('email_verified_at')->count();
+            
+            // Get subscription-related counts (handle case where subscriptions table doesn't exist)
+            $usersWithSubscriptions = 0;
+            $usersWithActiveSubscriptions = 0;
+            
+            try {
+                $usersWithSubscriptions = User::whereHas('subscriptions')->count();
+                $usersWithActiveSubscriptions = User::whereHas('subscriptions', function ($q) {
                     $q->where('status', 'active');
-                })->count(),
-                'recent_registrations' => User::where('created_at', '>=', now()->subDays(30))->count(),
-                'role_distribution' => DB::table('user_roles')
-                                        ->join('roles', 'user_roles.role_id', '=', 'roles.id')
-                                        ->select('roles.display_name as role', DB::raw('count(*) as count'))
-                                        ->groupBy('roles.id', 'roles.display_name')
-                                        ->orderBy('count', 'desc')
-                                        ->get(),
-                'recent_logins' => User::whereNotNull('last_login_at')
-                                      ->where('last_login_at', '>=', now()->subDays(7))
-                                      ->count()
+                })->count();
+            } catch (\Exception $e) {
+                // Subscriptions table might not exist yet
+                Log::info('Subscriptions table not available for statistics', [
+                    'error' => $e->getMessage()
+                ]);
+            }
+            
+            // Get recent registrations
+            $recentRegistrations = User::where('created_at', '>=', now()->subDays(30))->count();
+            
+            // Get role distribution
+            $roleDistribution = collect();
+            try {
+                $roleDistribution = DB::table('user_roles')
+                                    ->join('roles', 'user_roles.role_id', '=', 'roles.id')
+                                    ->select('roles.display_name as role', DB::raw('count(*) as count'))
+                                    ->groupBy('roles.id', 'roles.display_name')
+                                    ->orderBy('count', 'desc')
+                                    ->get();
+            } catch (\Exception $e) {
+                Log::info('Role distribution query failed', [
+                    'error' => $e->getMessage()
+                ]);
+            }
+            
+            // Get recent logins (handle case where last_login_at column doesn't exist)
+            $recentLogins = 0;
+            try {
+                $recentLogins = User::whereNotNull('last_login_at')
+                                  ->where('last_login_at', '>=', now()->subDays(7))
+                                  ->count();
+            } catch (\Exception $e) {
+                // last_login_at column might not exist
+                Log::info('last_login_at column not available', [
+                    'error' => $e->getMessage()
+                ]);
+            }
+
+            $stats = [
+                'total_users' => $totalUsers,
+                'verified_users' => $verifiedUsers,
+                'users_with_subscriptions' => $usersWithSubscriptions,
+                'users_with_active_subscriptions' => $usersWithActiveSubscriptions,
+                'recent_registrations' => $recentRegistrations,
+                'role_distribution' => $roleDistribution,
+                'recent_logins' => $recentLogins
             ];
 
             return response()->json([
@@ -453,13 +556,14 @@ class AdminUserController extends AdminControllerBase
         } catch (\Exception $e) {
             Log::error('Failed to get user statistics', [
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
                 'admin_id' => Auth::id()
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to get statistics',
-                'error' => $e->getMessage()
+                'message' => 'Failed to get statistics: ' . $e->getMessage(),
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }
@@ -469,8 +573,6 @@ class AdminUserController extends AdminControllerBase
      */
     public function bulkUpdate(Request $request): JsonResponse
     {
-        $this->authorize('admin.users.manage');
-
         $request->validate([
             'user_ids' => 'required|array|max:100',
             'user_ids.*' => 'integer|exists:users,id',
@@ -581,13 +683,5 @@ class AdminUserController extends AdminControllerBase
             'subscriptions_count' => $user->subscriptions()->count(),
             'archived_by' => Auth::id()
         ]);
-    }
-
-    /**
-     * Check if current user can perform action
-     */
-    protected function authorize(string $permission): void
-    {
-        parent::authorize($permission);
     }
 }

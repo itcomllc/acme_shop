@@ -8,6 +8,7 @@ use App\Http\Controllers\{
     EabController  // 追加
 };
 use App\Http\Controllers\Admin\{
+    AdminDashboardController,    // 追加
     AdminRoleController,
     AdminUserController
 };
@@ -69,12 +70,11 @@ Route::middleware(['auth', 'verified'])->prefix('ssl')->name('ssl.')->group(func
 // Admin routes (requires admin permissions)
 Route::middleware(['auth', 'permission:admin.access'])->prefix('admin')->name('admin.')->group(function () {
     
-    // Admin Dashboard
-    Route::get('/', function () {
-        return view('admin.dashboard');
-    })->name('dashboard');
+    // Admin Dashboard - AdminDashboardController を追加
+    Route::get('/', [AdminDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/system-overview', [AdminDashboardController::class, 'systemOverview'])->name('system.overview');
     
-    // User Management
+    // 既存のUser Management routes
     Route::middleware('permission:users.view_all')->group(function () {
         Route::resource('users', AdminUserController::class);
         Route::post('users/{user}/assign-role', [AdminUserController::class, 'assignRole'])->name('users.assign-role');
@@ -83,7 +83,7 @@ Route::middleware(['auth', 'permission:admin.access'])->prefix('admin')->name('a
         Route::get('users-statistics', [AdminUserController::class, 'statistics'])->name('users.statistics');
     });
     
-    // Role Management
+    // 既存のRole Management routes
     Route::middleware('permission:admin.roles.manage')->group(function () {
         Route::resource('roles', AdminRoleController::class);
         Route::post('roles/{role}/assign-user', [AdminRoleController::class, 'assignToUser'])->name('roles.assign-user');
@@ -160,3 +160,36 @@ if (!app()->environment('production')) {
         })->name('simulate-failure');
     });
 }
+
+
+Route::middleware('auth')->get('/debug-permissions', function () {
+    $user = auth()->user();
+    
+    if (!$user) {
+        return 'Not authenticated';
+    }
+    
+    $data = [
+        'user' => $user->only(['id', 'name', 'email']),
+        'primary_role' => $user->primaryRole ? [
+            'id' => $user->primaryRole->id,
+            'name' => $user->primaryRole->name,
+            'display_name' => $user->primaryRole->display_name
+        ] : null,
+        'all_roles' => $user->roles->map(function ($role) {
+            return [
+                'id' => $role->id,
+                'name' => $role->name,
+                'display_name' => $role->display_name
+            ];
+        }),
+        'has_admin_access' => $user->hasPermission('admin.access'),
+        'can_access_admin' => method_exists($user, 'canAccessAdmin') ? $user->canAccessAdmin() : 'method not found',
+        'all_permissions' => $user->getAllPermissions()->pluck('name')->toArray(),
+        'roles_with_admin_access' => \App\Models\Role::whereHas('permissions', function ($q) {
+            $q->where('name', 'admin.access');
+        })->get(['name', 'display_name'])
+    ];
+    
+    return response()->json($data, 200, [], JSON_PRETTY_PRINT);
+});
