@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\{Auth, Log};
 
 /**
  * Base Admin Controller
@@ -16,6 +16,8 @@ abstract class AdminControllerBase extends Controller implements HasMiddleware
 {
     /**
      * Get the middleware that should be assigned to the controller.
+     *
+     * @return array<int, string|\Illuminate\Routing\Controllers\Middleware>
      */
     public static function middleware(): array
     {
@@ -48,9 +50,10 @@ abstract class AdminControllerBase extends Controller implements HasMiddleware
      */
     protected function authorize(string $permission): void
     {
-        /** @var \App\Models\User */
+        /** @var User $user */
         $user = Auth::user();
-        if (!$user->hasPermission($permission)) {
+        
+        if (!$user || !$user->hasPermission($permission)) {
             abort(403, 'Insufficient permissions');
         }
     }
@@ -60,8 +63,12 @@ abstract class AdminControllerBase extends Controller implements HasMiddleware
      */
     protected function authorizeAny(array $permissions): void
     {
-        /** @var \App\Models\User */
+        /** @var User $user */
         $user = Auth::user();
+        
+        if (!$user) {
+            abort(403, 'Authentication required');
+        }
         
         foreach ($permissions as $permission) {
             if ($user->hasPermission($permission)) {
@@ -77,8 +84,12 @@ abstract class AdminControllerBase extends Controller implements HasMiddleware
      */
     protected function authorizeAll(array $permissions): void
     {
-        /** @var \App\Models\User */
+        /** @var User $user */
         $user = Auth::user();
+        
+        if (!$user) {
+            abort(403, 'Authentication required');
+        }
         
         foreach ($permissions as $permission) {
             if (!$user->hasPermission($permission)) {
@@ -92,9 +103,10 @@ abstract class AdminControllerBase extends Controller implements HasMiddleware
      */
     protected function authorizeRole(string $role): void
     {
-        /** @var \App\Models\User */
+        /** @var User $user */
         $user = Auth::user();
-        if (!$user->hasRole($role)) {
+        
+        if (!$user || !$user->hasRole($role)) {
             abort(403, 'Insufficient role permissions');
         }
     }
@@ -104,9 +116,10 @@ abstract class AdminControllerBase extends Controller implements HasMiddleware
      */
     protected function authorizeAnyRole(array $roles): void
     {
-        /** @var \App\Models\User */
+        /** @var User $user */
         $user = Auth::user();
-        if (!$user->hasAnyRole($roles)) {
+        
+        if (!$user || !$user->hasAnyRole($roles)) {
             abort(403, 'Insufficient role permissions');
         }
     }
@@ -114,10 +127,14 @@ abstract class AdminControllerBase extends Controller implements HasMiddleware
     /**
      * Get authenticated admin user
      */
-    protected function getAuthenticatedAdmin()
+    protected function getAuthenticatedAdmin(): User
     {
-        /** @var \App\Models\User */
+        /** @var User $user */
         $user = Auth::user();
+        
+        if (!$user) {
+            abort(401, 'Authentication required');
+        }
         
         if (!$user->canAccessAdmin()) {
             abort(403, 'Admin access required');
@@ -131,9 +148,12 @@ abstract class AdminControllerBase extends Controller implements HasMiddleware
      */
     protected function logAdminAction(string $action, array $data = []): void
     {
+        /** @var User $user */
+        $user = Auth::user();
+        
         Log::info("Admin action: {$action}", array_merge([
-            'admin_id' => Auth::id(),
-            'admin_email' => Auth::user()->email,
+            'admin_id' => $user?->id,
+            'admin_email' => $user?->email,
             'timestamp' => now()->toISOString(),
         ], $data));
     }
