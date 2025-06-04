@@ -13,14 +13,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Register core service providers
-        $this->app->register(LivewireServiceProvider::class);
-        $this->app->register(VoltServiceProvider::class);
-        
-        // Register SSL service providers
-        $this->app->register(SquareServiceProvider::class);
-        //$this->app->register(EnhancedSSLServiceProvider::class);
-        
         // Development environment specific registrations
         if ($this->app->environment('local', 'testing')) {
             $this->registerDevelopmentServices();
@@ -63,12 +55,22 @@ class AppServiceProvider extends ServiceProvider
      */
     private function enableQueryLogging(): void
     {
+        // データベース接続チェック
+        if (!$this->isDatabaseAvailable()) {
+            return;
+        }
+
         DB::listen(function ($query) {
-            Log::channel('database')->info('Database Query', [
-                'sql' => $query->sql,
-                'bindings' => $query->bindings,
-                'time' => $query->time . 'ms'
-            ]);
+            try {
+                // 通常のログチャンネルを使用（databaseではなく）
+                Log::info('Database Query', [
+                    'sql' => $query->sql,
+                    'bindings' => $query->bindings,
+                    'time' => $query->time . 'ms'
+                ]);
+            } catch (\Exception $e) {
+                // ログ記録に失敗した場合は無視
+            }
         });
     }
 
@@ -186,19 +188,36 @@ class AppServiceProvider extends ServiceProvider
                 },
                 'ssl_providers' => function () {
                     try {
-                        $factory = app(\App\Services\CertificateProviderFactory::class);
-                        $status = $factory->getProviderStatus();
-                        return [
-                            'status' => $status['configured_providers'] > 0 ? 'healthy' : 'warning',
-                            'message' => "Configured providers: {$status['configured_providers']}/{$status['total_providers']}",
-                            'providers' => $status['available_providers']
-                        ];
+                        // CertificateProviderFactoryが存在する場合のみ実行
+                        if (class_exists(\App\Services\CertificateProviderFactory::class)) {
+                            $factory = app(\App\Services\CertificateProviderFactory::class);
+                            $status = $factory->getProviderStatus();
+                            return [
+                                'status' => $status['configured_providers'] > 0 ? 'healthy' : 'warning',
+                                'message' => "Configured providers: {$status['configured_providers']}/{$status['total_providers']}",
+                                'providers' => $status['available_providers']
+                            ];
+                        }
+                        return ['status' => 'warning', 'message' => 'SSL provider factory not available'];
                     } catch (\Exception $e) {
                         return ['status' => 'unhealthy', 'message' => 'SSL provider check failed: ' . $e->getMessage()];
                     }
                 }
             ];
         });
+    }
+
+    /**
+     * Check if database is available
+     */
+    private function isDatabaseAvailable(): bool
+    {
+        try {
+            DB::connection()->getPdo();
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 
     /**
@@ -211,13 +230,21 @@ class AppServiceProvider extends ServiceProvider
         $overallStatus = 'healthy';
 
         foreach ($checks as $name => $check) {
-            $result = $check();
-            $results[$name] = $result;
-            
-            if ($result['status'] === 'unhealthy') {
+            try {
+                $result = $check();
+                $results[$name] = $result;
+                
+                if ($result['status'] === 'unhealthy') {
+                    $overallStatus = 'unhealthy';
+                } elseif ($result['status'] === 'warning' && $overallStatus === 'healthy') {
+                    $overallStatus = 'warning';
+                }
+            } catch (\Exception $e) {
+                $results[$name] = [
+                    'status' => 'unhealthy',
+                    'message' => 'Health check failed: ' . $e->getMessage()
+                ];
                 $overallStatus = 'unhealthy';
-            } elseif ($result['status'] === 'warning' && $overallStatus === 'healthy') {
-                $overallStatus = 'warning';
             }
         }
 

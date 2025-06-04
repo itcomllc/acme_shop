@@ -43,10 +43,10 @@ trait HasRoles
     public function hasRole($role): bool
     {
         if ($role instanceof Role) {
-            return $this->roles()->where('id', $role->id)->exists();
+            return $this->roles()->where('roles.id', $role->id)->exists();
         }
 
-        return $this->roles()->where('name', $role)->exists();
+        return $this->roles()->where('roles.name', $role)->exists();
     }
 
     /**
@@ -54,7 +54,7 @@ trait HasRoles
      */
     public function hasAnyRole(array $roles): bool
     {
-        return $this->roles()->whereIn('name', $roles)->exists();
+        return $this->roles()->whereIn('roles.name', $roles)->exists();
     }
 
     /**
@@ -62,7 +62,7 @@ trait HasRoles
      */
     public function hasAllRoles(array $roles): bool
     {
-        $userRoles = $this->roles()->pluck('name')->toArray();
+        $userRoles = $this->roles()->pluck('roles.name')->toArray();
         return count(array_intersect($roles, $userRoles)) === count($roles);
     }
 
@@ -73,8 +73,8 @@ trait HasRoles
     {
         // Check direct permissions first
         $directPermission = $this->permissions()
-                                ->where('name', $permission)
-                                ->where('is_active', true)
+                                ->where('permissions.name', $permission)
+                                ->where('permissions.is_active', true)
                                 ->first();
 
         if ($directPermission) {
@@ -99,9 +99,9 @@ trait HasRoles
     {
         // Check direct permissions first
         $directPermission = $this->permissions()
-                                ->where('resource', $resource)
-                                ->where('action', $action)
-                                ->where('is_active', true)
+                                ->where('permissions.resource', $resource)
+                                ->where('permissions.action', $action)
+                                ->where('permissions.is_active', true)
                                 ->first();
 
         if ($directPermission) {
@@ -131,11 +131,11 @@ trait HasRoles
             // Permissions via roles
             $rolePermissions = Permission::whereHas('roles.users', function ($query) {
                 $query->where('users.id', $this->id);
-            })->where('is_active', true)->get();
+            })->where('permissions.is_active', true)->get();
 
             // Direct permissions (granted only)
             $directPermissions = $this->permissions()
-                                     ->where('is_active', true)
+                                     ->where('permissions.is_active', true)
                                      ->wherePivot('type', 'grant')
                                      ->get();
 

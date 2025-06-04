@@ -127,6 +127,61 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        // SSL関連のログチャンネル
+        'ssl' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/ssl.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
+        'ssl-monitoring' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/ssl-monitoring.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
+        'ssl-providers' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/ssl-providers.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
+        'acme' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/acme.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
+        'billing' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/billing.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => 90,
+            'replace_placeholders' => true,
+        ],
+
+        'security' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/security.log'),
+            'level' => env('LOG_LEVEL', 'warning'),
+            'days' => 90,
+            'replace_placeholders' => true,
+        ],
+
+        // データベースログチャンネル（カスタムハンドラー使用）
+        'database' => [
+            'driver' => 'custom',
+            'via' => App\Logging\DatabaseLoggerFactory::class,
+            'level' => env('LOG_LEVEL', 'info'),
+        ],
     ],
 
 ];
