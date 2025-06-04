@@ -7,7 +7,7 @@ use App\Models\{Role, Permission, User};
 use Illuminate\Http\{Request, JsonResponse, RedirectResponse};
 use Illuminate\Routing\Controllers\{HasMiddleware, Middleware};
 use Illuminate\View\View;
-use Illuminate\Support\Facades\{DB, Log, Validator};
+use Illuminate\Support\Facades\{DB, Log, Validator, Auth};
 use Illuminate\Validation\Rule;
 
 class AdminRoleController extends AdminControllerBase implements HasMiddleware
@@ -26,7 +26,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
     /**
      * Display a listing of roles
      */
-    public function index(Request $request): View|JsonResponse
+    public function index(Request $request): View|JsonResponse|RedirectResponse
     {
         try {
             $query = Role::with(['permissions', 'users']);
@@ -49,8 +49,8 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             }
 
             // Sorting
-            $sortBy = $request->get('sort_by', 'created_at');
-            $sortDirection = $request->get('sort_direction', 'desc');
+            $sortBy = $request->get('sort_by', 'priority');
+            $sortDirection = $request->get('sort_direction', 'asc');
             $query->orderBy($sortBy, $sortDirection);
 
             // Pagination
@@ -139,12 +139,13 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
     public function store(Request $request): RedirectResponse|JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'name' => ['required', 'string', 'max:255', 'unique:roles', 'alpha_dash'],
+            'name' => ['required', 'string', 'max:255', 'unique:roles', 'regex:/^[a-z_]+$/'],
             'display_name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
+            'color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'priority' => ['required', 'integer', 'min:1', 'max:999'],
             'permissions' => ['array'],
             'permissions.*' => ['exists:permissions,id'],
-            'is_system_role' => ['boolean'],
         ]);
 
         if ($validator->fails()) {
@@ -166,7 +167,9 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
                 'name' => $request->name,
                 'display_name' => $request->display_name,
                 'description' => $request->description,
-                'is_system_role' => $request->boolean('is_system_role', false),
+                'color' => $request->color ?? '#3b82f6',
+                'priority' => $request->priority,
+                'is_active' => true,
             ]);
 
             // Attach permissions
@@ -177,7 +180,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             DB::commit();
 
             Log::info('Role created by admin', [
-                'admin_id' => auth()->id(),
+                'admin_id' => Auth::id(),
                 'role_id' => $role->id,
                 'role_name' => $role->name,
                 'permissions_count' => count($request->permissions ?? [])
@@ -197,7 +200,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             DB::rollBack();
 
             Log::error('Failed to create role', [
-                'admin_id' => auth()->id(),
+                'admin_id' => Auth::id(),
                 'error' => $e->getMessage()
             ]);
 
@@ -215,23 +218,47 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
     /**
      * Display the specified role
      */
-    public function show(Role $role): View|JsonResponse
+    public function show(Role $role, Request $request): View|JsonResponse|RedirectResponse
     {
-        $role->load([
-            'permissions',
-            'users' => function ($query) {
-                $query->select('id', 'name', 'email', 'created_at');
-            }
-        ]);
-
-        if (request()->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'data' => $role
+        try {
+            // Load relationships with proper select to avoid ambiguous column issues
+            $role->load([
+                'permissions' => function ($query) {
+                    $query->select('permissions.*');
+                },
+                'users' => function ($query) {
+                    $query->select('users.id', 'users.name', 'users.email', 'users.created_at');
+                }
             ]);
-        }
 
-        return view('admin.roles.show', compact('role'));
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'role' => $role
+                    ]
+                ]);
+            }
+
+            return view('admin.roles.show', compact('role'));
+        } catch (\Exception $e) {
+            Log::error('Failed to load role details', [
+                'role_id' => $role->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id()
+            ]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to load role details',
+                    'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+                ], 500);
+            }
+
+            return back()->withErrors(['error' => 'Failed to load role details']);
+        }
     }
 
     /**
@@ -240,7 +267,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
     public function edit(Role $role): View
     {
         // Prevent editing system roles
-        if ($role->is_system_role) {
+        if ($role->isSystemRole()) {
             abort(403, 'System roles cannot be edited');
         }
 
@@ -256,7 +283,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
     public function update(Request $request, Role $role): RedirectResponse|JsonResponse
     {
         // Prevent updating system roles
-        if ($role->is_system_role) {
+        if ($role->isSystemRole()) {
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => false,
@@ -267,9 +294,11 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
         }
 
         $validator = Validator::make($request->all(), [
-            'name' => ['required', 'string', 'max:255', Rule::unique('roles')->ignore($role->id), 'alpha_dash'],
             'display_name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
+            'color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'priority' => ['required', 'integer', 'min:1', 'max:999'],
+            'is_active' => ['boolean'],
             'permissions' => ['array'],
             'permissions.*' => ['exists:permissions,id'],
         ]);
@@ -289,9 +318,11 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             DB::beginTransaction();
 
             $role->update([
-                'name' => $request->name,
                 'display_name' => $request->display_name,
                 'description' => $request->description,
+                'color' => $request->color ?? $role->color,
+                'priority' => $request->priority,
+                'is_active' => $request->boolean('is_active', true),
             ]);
 
             // Sync permissions
@@ -300,7 +331,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             DB::commit();
 
             Log::info('Role updated by admin', [
-                'admin_id' => auth()->id(),
+                'admin_id' => Auth::id(),
                 'role_id' => $role->id,
                 'role_name' => $role->name,
                 'permissions_count' => count($request->permissions ?? [])
@@ -320,7 +351,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             DB::rollBack();
 
             Log::error('Failed to update role', [
-                'admin_id' => auth()->id(),
+                'admin_id' => Auth::id(),
                 'role_id' => $role->id,
                 'error' => $e->getMessage()
             ]);
@@ -342,7 +373,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
     public function destroy(Role $role): RedirectResponse|JsonResponse
     {
         // Prevent deletion of system roles
-        if ($role->is_system_role) {
+        if ($role->isSystemRole()) {
             if (request()->expectsJson()) {
                 return response()->json([
                     'success' => false,
@@ -378,7 +409,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             DB::commit();
 
             Log::info('Role deleted by admin', [
-                'admin_id' => auth()->id(),
+                'admin_id' => Auth::id(),
                 'deleted_role_id' => $roleId,
                 'deleted_role_name' => $roleName
             ]);
@@ -396,7 +427,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             DB::rollBack();
 
             Log::error('Failed to delete role', [
-                'admin_id' => auth()->id(),
+                'admin_id' => Auth::id(),
                 'role_id' => $role->id,
                 'error' => $e->getMessage()
             ]);
@@ -445,7 +476,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             DB::commit();
 
             Log::info('Role assigned to user by admin', [
-                'admin_id' => auth()->id(),
+                'admin_id' => Auth::id(),
                 'user_id' => $user->id,
                 'role_id' => $role->id,
                 'is_primary' => $request->boolean('is_primary')
@@ -463,7 +494,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             DB::rollBack();
 
             Log::error('Failed to assign role to user', [
-                'admin_id' => auth()->id(),
+                'admin_id' => Auth::id(),
                 'user_id' => $request->user_id,
                 'role_id' => $role->id,
                 'error' => $e->getMessage()
@@ -510,7 +541,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             DB::commit();
 
             Log::info('Role removed from user by admin', [
-                'admin_id' => auth()->id(),
+                'admin_id' => Auth::id(),
                 'user_id' => $user->id,
                 'role_id' => $role->id
             ]);
@@ -527,7 +558,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             DB::rollBack();
 
             Log::error('Failed to remove role from user', [
-                'admin_id' => auth()->id(),
+                'admin_id' => Auth::id(),
                 'user_id' => $request->user_id,
                 'role_id' => $role->id,
                 'error' => $e->getMessage()
@@ -584,7 +615,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             DB::commit();
 
             Log::info('Bulk role assignment by admin', [
-                'admin_id' => auth()->id(),
+                'admin_id' => Auth::id(),
                 'role_id' => $role->id,
                 'user_count' => $updated,
                 'is_primary' => $isPrimary
@@ -599,7 +630,7 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
             DB::rollBack();
 
             Log::error('Bulk role assignment failed', [
-                'admin_id' => auth()->id(),
+                'admin_id' => Auth::id(),
                 'role_id' => $request->role_id,
                 'error' => $e->getMessage()
             ]);

@@ -191,6 +191,12 @@ class Role extends Model
      */
     public function isSystemRole(): bool
     {
+        // Check both metadata and predefined system roles
+        if (is_array($this->metadata) && isset($this->metadata['system']) && $this->metadata['system']) {
+            return true;
+        }
+
+        // Fallback to predefined system roles
         return in_array($this->name, [
             self::SUPER_ADMIN,
             self::ADMIN,
