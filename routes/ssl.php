@@ -79,6 +79,7 @@ Route::middleware(['auth', 'permission:admin.access'])->prefix('admin')->name('a
         Route::resource('users', AdminUserController::class);
         Route::post('users/{user}/assign-role', [AdminUserController::class, 'assignRole'])->name('users.assign-role');
         Route::delete('users/{user}/roles/{role}', [AdminUserController::class, 'removeRole'])->name('users.remove-role');
+        Route::post('users/{user}/resend-verification', [AdminUserController::class, 'resendVerification'])->name('users.resend-verification');
         Route::post('users/bulk-update', [AdminUserController::class, 'bulkUpdate'])->name('users.bulk-update');
         Route::get('users-statistics', [AdminUserController::class, 'statistics'])->name('users.statistics');
     });

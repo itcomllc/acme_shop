@@ -26,21 +26,21 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
         ];
     }
 
-   /**
+    /**
      * Display users management page
      */
     public function index(Request $request)
     {
         try {
             $query = User::with(['primaryRole', 'roles'])
-                        ->withCount(['subscriptions', 'roles']);
+                ->withCount(['subscriptions', 'roles']);
 
             // Apply filters
             if ($request->has('search')) {
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%");
+                        ->orWhere('email', 'like', "%{$search}%");
                 });
             }
 
@@ -112,7 +112,6 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
 
             $roles = Role::active()->byPriority()->get();
             return view('admin.users.index', compact('users', 'roles'));
-
         } catch (\Exception $e) {
             Log::error('Failed to load users in admin panel', [
                 'error' => $e->getMessage(),
@@ -157,9 +156,9 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
             'total_subscriptions' => $user->subscriptions()->count(),
             'active_subscriptions' => $user->subscriptions()->where('status', 'active')->count(),
             'total_certificates' => $user->subscriptions()
-                                        ->withCount('certificates')
-                                        ->get()
-                                        ->sum('certificates_count'),
+                ->withCount('certificates')
+                ->get()
+                ->sum('certificates_count'),
             'last_login' => $user->last_login_at ?? 'Never',
             'account_age_days' => $user->created_at->diffInDays(now()),
         ];
@@ -186,6 +185,7 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
         return view('admin.users.show', compact('user', 'userStats'));
     }
 
+
     /**
      * Store a newly created user
      */
@@ -201,22 +201,54 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
 
         try {
             $user = DB::transaction(function () use ($request) {
-                $newUser = User::create([
+                $userData = [
                     'name' => $request->name,
                     'email' => $request->email,
                     'password' => Hash::make($request->password),
-                    'email_verified_at' => $request->boolean('email_verified') ? now() : null,
-                ]);
+                ];
+
+                $isEmailVerified = $request->boolean('email_verified');
+
+                // email_verified_atの設定
+                if ($isEmailVerified) {
+                    $userData['email_verified_at'] = now();
+                }
+
+                $newUser = User::create($userData);
 
                 $role = Role::findOrFail($request->role_id);
                 $newUser->assignRole($role);
                 $newUser->setPrimaryRole($role);
 
+                // Registeredイベントを条件付きで発火
+                if (!$isEmailVerified) {
+                    // メール認証が必要な場合のみRegisteredイベントを発火
+                    event(new \Illuminate\Auth\Events\Registered($newUser));
+
+                    Log::info('Registered event fired for admin-created user', [
+                        'user_id' => $newUser->id,
+                        'email' => $newUser->email,
+                        'reason' => 'email_verification_required'
+                    ]);
+                } else {
+                    // メール認証済みの場合は、Registeredイベントをスキップしてウェルカムメール送信
+                    \App\Jobs\SendUserWelcomeEmail::dispatch($newUser, true); // true = created by admin
+
+                    Log::info('User created with verified email, skipped Registered event', [
+                        'user_id' => $newUser->id,
+                        'email' => $newUser->email,
+                        'reason' => 'email_pre_verified'
+                    ]);
+                }
+
                 Log::info('User created by admin', [
                     'user_id' => $newUser->id,
                     'email' => $newUser->email,
                     'role' => $role->name,
-                    'created_by' => Auth::id()
+                    'created_by' => Auth::id(),
+                    'email_verified' => $isEmailVerified,
+                    'email_verified_at' => $newUser->email_verified_at,
+                    'registered_event_fired' => !$isEmailVerified
                 ]);
 
                 return $newUser;
@@ -231,8 +263,7 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
             }
 
             return redirect()->route('admin.users.index')
-                           ->with('success', 'User created successfully');
-
+                ->with('success', 'User created successfully');
         } catch (\Exception $e) {
             Log::error('Failed to create user', [
                 'error' => $e->getMessage(),
@@ -302,7 +333,7 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
                 if ($request->has('primary_role_id')) {
                     $role = Role::findOrFail($request->primary_role_id);
                     $user->setPrimaryRole($role);
-                    
+
                     // Ensure user has this role assigned
                     if (!$user->hasRole($role)) {
                         $user->assignRole($role);
@@ -325,8 +356,7 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
             }
 
             return redirect()->route('admin.users.index')
-                           ->with('success', 'User updated successfully');
-
+                ->with('success', 'User updated successfully');
         } catch (\Exception $e) {
             Log::error('Failed to update user', [
                 'user_id' => $user->id,
@@ -390,10 +420,10 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
         try {
             DB::transaction(function () use ($user) {
                 $userEmail = $user->email;
-                
+
                 // Archive user data before deletion
                 $this->archiveUserData($user);
-                
+
                 $user->delete();
 
                 Log::info('User deleted by admin', [
@@ -410,8 +440,7 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
             }
 
             return redirect()->route('admin.users.index')
-                           ->with('success', 'User deleted successfully');
-
+                ->with('success', 'User deleted successfully');
         } catch (\Exception $e) {
             Log::error('Failed to delete user', [
                 'user_id' => $user->id,
@@ -465,7 +494,6 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
                 'message' => 'Role assigned successfully',
                 'data' => $user->fresh(['roles', 'primaryRole'])
             ]);
-
         } catch (\Exception $e) {
             Log::error('Failed to assign role to user', [
                 'user_id' => $user->id,
@@ -518,7 +546,6 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
                 'message' => 'Role removed successfully',
                 'data' => $user->fresh(['roles', 'primaryRole'])
             ]);
-
         } catch (\Exception $e) {
             Log::error('Failed to remove role from user', [
                 'user_id' => $user->id,
@@ -544,11 +571,11 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
             // Get basic user counts
             $totalUsers = User::count();
             $verifiedUsers = User::whereNotNull('email_verified_at')->count();
-            
+
             // Get subscription-related counts (handle case where subscriptions table doesn't exist)
             $usersWithSubscriptions = 0;
             $usersWithActiveSubscriptions = 0;
-            
+
             try {
                 $usersWithSubscriptions = User::whereHas('subscriptions')->count();
                 $usersWithActiveSubscriptions = User::whereHas('subscriptions', function ($q) {
@@ -560,31 +587,31 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
                     'error' => $e->getMessage()
                 ]);
             }
-            
+
             // Get recent registrations
             $recentRegistrations = User::where('created_at', '>=', now()->subDays(30))->count();
-            
+
             // Get role distribution
             $roleDistribution = collect();
             try {
                 $roleDistribution = DB::table('user_roles')
-                                    ->join('roles', 'user_roles.role_id', '=', 'roles.id')
-                                    ->select('roles.display_name as role', DB::raw('count(*) as count'))
-                                    ->groupBy('roles.id', 'roles.display_name')
-                                    ->orderBy('count', 'desc')
-                                    ->get();
+                    ->join('roles', 'user_roles.role_id', '=', 'roles.id')
+                    ->select('roles.display_name as role', DB::raw('count(*) as count'))
+                    ->groupBy('roles.id', 'roles.display_name')
+                    ->orderBy('count', 'desc')
+                    ->get();
             } catch (\Exception $e) {
                 Log::info('Role distribution query failed', [
                     'error' => $e->getMessage()
                 ]);
             }
-            
+
             // Get recent logins (handle case where last_login_at column doesn't exist)
             $recentLogins = 0;
             try {
                 $recentLogins = User::whereNotNull('last_login_at')
-                                  ->where('last_login_at', '>=', now()->subDays(7))
-                                  ->count();
+                    ->where('last_login_at', '>=', now()->subDays(7))
+                    ->count();
             } catch (\Exception $e) {
                 // last_login_at column might not exist
                 Log::info('last_login_at column not available', [
@@ -606,7 +633,6 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
                 'success' => true,
                 'data' => $stats
             ]);
-
         } catch (\Exception $e) {
             Log::error('Failed to get user statistics', [
                 'error' => $e->getMessage(),
@@ -630,7 +656,7 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
         $request->validate([
             'user_ids' => 'required|array|max:100',
             'user_ids.*' => 'integer|exists:users,id',
-            'action' => 'required|in:verify_email,unverify_email,activate,deactivate',
+            'action' => 'required|in:verify_email,unverify_email,activate,deactivate,resend_verification,assign_role', // activate,deactivate実装されていないが、将来の拡張のためかもしれない
             'role_id' => 'required_if:action,assign_role|integer|exists:roles,id'
         ]);
 
@@ -659,6 +685,11 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
                             case 'unverify_email':
                                 $user->update(['email_verified_at' => null]);
                                 break;
+                            case 'resend_verification':
+                                if (!$user->hasVerifiedEmail()) {
+                                    $this->resendVerification($user, request());
+                                }
+                                break;
                             case 'assign_role':
                                 $role = Role::findOrFail($request->role_id);
                                 if (!$user->hasRole($role)) {
@@ -672,7 +703,6 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
                             'user_name' => $user->name,
                             'status' => 'success'
                         ];
-
                     } catch (\Exception $e) {
                         $results[] = [
                             'user_id' => $user->id,
@@ -708,7 +738,6 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
                     ]
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Bulk user update failed', [
                 'error' => $e->getMessage(),
@@ -724,13 +753,64 @@ class AdminUserController extends AdminControllerBase implements HasMiddleware
     }
 
     /**
+     * Resend email verification notification
+     */
+    public function resendVerification(User $user, Request $request)
+    {
+        if ($user->hasVerifiedEmail()) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email is already verified'
+                ], 422);
+            }
+            return back()->withErrors(['error' => 'Email is already verified']);
+        }
+
+        try {
+            $user->sendEmailVerificationNotification();
+
+            Log::info('Email verification resent by admin', [
+                'user_id' => $user->id,
+                'user_email' => $user->email,
+                'admin_id' => Auth::id()
+            ]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Verification email sent successfully'
+                ]);
+            }
+
+            return back()->with('success', 'Verification email sent successfully');
+        } catch (\Exception $e) {
+            Log::error('Failed to resend verification email', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+                'admin_id' => Auth::id()
+            ]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to send verification email',
+                    'error' => $e->getMessage()
+                ], 500);
+            }
+
+            return back()->withErrors(['error' => 'Failed to send verification email: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
      * Archive user data before deletion
      */
     private function archiveUserData(User $user): void
     {
         // Implementation would depend on your archival requirements
         // This is a placeholder for compliance/audit requirements
-        
+
         Log::info('User data archived', [
             'user_id' => $user->id,
             'user_email' => $user->email,

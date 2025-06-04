@@ -13,25 +13,72 @@ new #[Layout('components.layouts.auth')] class extends Component {
     public string $email = '';
     public string $password = '';
     public string $password_confirmation = '';
+    public bool $email_verified = false; // 追加
 
     /**
      * Handle an incoming registration request.
      */
     public function register(): void
     {
-        $validated = $this->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:' . User::class],
-            'password' => ['required', 'string', 'confirmed', Rules\Password::defaults()],
-        ]);
+        try {
+            $validated = $this->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:' . User::class],
+                'password' => ['required', 'string', 'confirmed', Rules\Password::defaults()],
+                'email_verified' => ['boolean'], // 追加
+            ]);
 
-        $validated['password'] = Hash::make($validated['password']);
+            $validated['password'] = Hash::make($validated['password']);
+            
+            // email_verified_atの設定を追加
+            if ($this->email_verified) {
+                $validated['email_verified_at'] = now();
+            }
 
-        event(new Registered(($user = User::create($validated))));
+            \DB::beginTransaction();
+            
+            try {
+                /** @var User $user */
+                $user = User::create($validated);
+                
+                // Registeredイベントを発火
+                event(new Registered($user));
 
-        Auth::login($user);
+                // ログ出力でデバッグ
+                \Log::info('User registered', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'email_verified_checkbox' => $this->email_verified,
+                    'email_verified_at' => $user->email_verified_at
+                ]);
 
-        $this->redirectIntended(route('dashboard', absolute: false), navigate: true);
+                \DB::commit();
+                
+                Auth::login($user);
+
+                $this->redirectIntended(route('dashboard', absolute: false), navigate: true);
+                
+            } catch (\Exception $e) {
+                \DB::rollBack();
+                
+                \Log::error('User registration failed', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                
+                session()->flash('error', 'Registration failed. Please try again.');
+                return;
+            }
+            
+        } catch (\Exception $e) {
+            \Log::error('Registration validation failed', [
+                'error' => $e->getMessage(),
+                'input' => $this->only(['name', 'email', 'email_verified'])
+            ]);
+            
+            session()->flash('error', 'Please check your input and try again.');
+            return;
+        }
     }
 }; ?>
 
@@ -84,6 +131,19 @@ new #[Layout('components.layouts.auth')] class extends Component {
             :placeholder="__('Confirm password')"
             viewable
         />
+
+        <!-- Email Verified Checkbox -->
+        <div class="flex items-center">
+            <input 
+                type="checkbox" 
+                wire:model="email_verified" 
+                id="email_verified"
+                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            >
+            <label for="email_verified" class="ml-2 block text-sm text-gray-900">
+                {{ __('Mark email as verified') }}
+            </label>
+        </div>
 
         <div class="flex items-center justify-end">
             <flux:button type="submit" variant="primary" class="w-full">

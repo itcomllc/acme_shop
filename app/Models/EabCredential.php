@@ -52,14 +52,6 @@ class EabCredential extends Model
     }
 
     /**
-     * Get subscription EAB credentials relationship
-     */
-    public function eabCredentials(): HasMany
-    {
-        return $this->subscription->hasMany(EabCredential::class);
-    }
-
-    /**
      * Check if credential is valid for use
      */
     public function isValid(): bool

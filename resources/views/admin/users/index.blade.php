@@ -254,8 +254,7 @@
     </div>
 
     <!-- Edit User Modal -->
-    <div id="editUserModal"
-        class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+    <div id="editUserModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
         <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-2/3 lg:w-1/2 shadow-lg rounded-md bg-white">
             <div class="mt-3">
                 <div class="flex items-center justify-between mb-4">
@@ -266,7 +265,7 @@
 
                 <form id="editUserForm" class="space-y-6">
                     <input type="hidden" id="edit-user-id">
-                    
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Name</label>
@@ -304,12 +303,13 @@
                         <label class="block text-sm font-medium text-gray-700 mb-2">Change Password (optional)</label>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <input type="password" name="password" id="edit-user-password" placeholder="New password"
+                                <input type="password" name="password" id="edit-user-password"
+                                    placeholder="New password"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                             </div>
                             <div>
-                                <input type="password" name="password_confirmation" id="edit-user-password-confirmation"
-                                    placeholder="Confirm new password"
+                                <input type="password" name="password_confirmation"
+                                    id="edit-user-password-confirmation" placeholder="Confirm new password"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                             </div>
                         </div>
@@ -375,6 +375,7 @@
                             <option value="">Select an action</option>
                             <option value="verify_email">Verify Email</option>
                             <option value="unverify_email">Unverify Email</option>
+                            <option value="resend_verification">Resend Verification Email</option>
                             <option value="assign_role">Assign Role</option>
                         </select>
                     </div>
@@ -546,12 +547,13 @@
                         const stats = data.data;
                         document.getElementById('total-users-count').textContent = stats.total_users || 0;
                         document.getElementById('verified-users-count').textContent = stats.verified_users || 0;
-                        document.getElementById('subscription-users-count').textContent = stats.users_with_subscriptions || 0;
+                        document.getElementById('subscription-users-count').textContent = stats
+                            .users_with_subscriptions || 0;
                         document.getElementById('new-users-count').textContent = stats.recent_registrations || 0;
                         return;
                     }
                 }
-                
+
                 // Set default values on error
                 document.getElementById('total-users-count').textContent = '0';
                 document.getElementById('verified-users-count').textContent = '0';
@@ -629,11 +631,11 @@
                     <td class="px-6 py-4 whitespace-nowrap">
                         <div class="flex flex-col">
                             ${user.primary_role ? `
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
-                                      style="background-color: ${user.primary_role.color}20; color: ${user.primary_role.color}">
-                                    ${user.primary_role.display_name}
-                                </span>
-                            ` : '<span class="text-sm text-gray-400">No role assigned</span>'}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
+                                          style="background-color: ${user.primary_role.color}20; color: ${user.primary_role.color}">
+                                        ${user.primary_role.display_name}
+                                    </span>
+                                ` : '<span class="text-sm text-gray-400">No role assigned</span>'}
                             ${user.roles_count > 1 ? `<span class="text-xs text-gray-500 mt-1">+${user.roles_count - 1} more</span>` : ''}
                         </div>
                     </td>
@@ -645,10 +647,10 @@
                                 ${user.email_verified_at ? 'Verified' : 'Unverified'}
                             </span>
                             ${user.subscriptions_count > 0 ? `
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                    ${user.subscriptions_count} subscription${user.subscriptions_count > 1 ? 's' : ''}
-                                </span>
-                            ` : ''}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        ${user.subscriptions_count} subscription${user.subscriptions_count > 1 ? 's' : ''}
+                                    </span>
+                                ` : ''}
                         </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -663,10 +665,14 @@
                                     class="text-blue-600 hover:text-blue-900">View</button>
                             <button onclick="editUser(${user.id})" 
                                     class="text-green-600 hover:text-green-900">Edit</button>
-                            ${user.id !== 1 && !user.is_super_admin ? `
-                                <button onclick="deleteUser(${user.id})" 
-                                        class="text-red-600 hover:text-red-900">Delete</button>
+                            ${!user.email_verified_at ? `
+                                <button onclick="resendVerification(${user.id})" 
+                                        class="text-purple-600 hover:text-purple-900">Resend Email</button>
                             ` : ''}
+                            ${user.id !== 1 && !user.is_super_admin ? `
+                                    <button onclick="deleteUser(${user.id})" 
+                                            class="text-red-600 hover:text-red-900">Delete</button>
+                                ` : ''}
                         </div>
                     </td>
                 </tr>
@@ -684,12 +690,12 @@
 
             filteredUsers = allUsers.filter(user => {
                 // Search filter
-                const matchesSearch = !search || 
+                const matchesSearch = !search ||
                     user.name.toLowerCase().includes(search) ||
                     user.email.toLowerCase().includes(search);
 
                 // Role filter
-                const matchesRole = !roleFilter || 
+                const matchesRole = !roleFilter ||
                     (user.primary_role && user.primary_role.name === roleFilter);
 
                 // Status filter
@@ -715,7 +721,7 @@
         // Handle create user form submission
         async function handleCreateUser(event) {
             event.preventDefault();
-            
+
             const formData = new FormData(event.target);
             const userData = {
                 name: formData.get('name'),
@@ -800,14 +806,14 @@
 
                 if (data.success) {
                     const user = data.data.user || data.data;
-                    
+
                     // Populate edit form
                     document.getElementById('edit-user-id').value = user.id;
                     document.getElementById('edit-user-name').value = user.name;
                     document.getElementById('edit-user-email').value = user.email;
                     document.getElementById('edit-user-role').value = user.primary_role ? user.primary_role.id : '';
                     document.getElementById('edit-user-email-verified').checked = !!user.email_verified_at;
-                    
+
                     document.getElementById('editUserModal').classList.remove('hidden');
                 } else {
                     showError(data.message || 'Failed to load user');
@@ -821,10 +827,10 @@
         // Handle edit user form submission
         async function handleEditUser(event) {
             event.preventDefault();
-            
+
             const userId = document.getElementById('edit-user-id').value;
             const formData = new FormData(event.target);
-            
+
             const userData = {
                 name: formData.get('name'),
                 email: formData.get('email'),
@@ -908,7 +914,7 @@
                 showError('Please select at least one user');
                 return;
             }
-            
+
             updateSelectedCount();
             document.getElementById('bulkActionsModal').classList.remove('hidden');
         }
@@ -916,11 +922,11 @@
         // Handle bulk actions form submission
         async function handleBulkActions(event) {
             event.preventDefault();
-            
+
             const formData = new FormData(event.target);
             const checkedBoxes = document.querySelectorAll('.user-checkbox:checked');
             const userIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
-            
+
             const bulkData = {
                 user_ids: userIds,
                 action: formData.get('action')
@@ -1031,10 +1037,10 @@
 
                     <!-- Role Information -->
                     ${roleInfo.primary_role || (roleInfo.all_roles && roleInfo.all_roles.length > 0) ? `
-                        <div>
-                            <h4 class="font-medium text-gray-900 mb-3">Roles & Permissions</h4>
-                            <div class="space-y-3">
-                                ${roleInfo.primary_role ? `
+                            <div>
+                                <h4 class="font-medium text-gray-900 mb-3">Roles & Permissions</h4>
+                                <div class="space-y-3">
+                                    ${roleInfo.primary_role ? `
                                     <div>
                                         <span class="text-sm font-medium text-gray-500">Primary Role:</span>
                                         <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
@@ -1043,27 +1049,27 @@
                                         </span>
                                     </div>
                                 ` : ''}
-                                
-                                ${roleInfo.all_roles && roleInfo.all_roles.length > 0 ? `
+                                    
+                                    ${roleInfo.all_roles && roleInfo.all_roles.length > 0 ? `
                                     <div>
                                         <span class="text-sm font-medium text-gray-500">All Roles:</span>
                                         <div class="mt-1 flex flex-wrap gap-1">
                                             ${roleInfo.all_roles.map(role => `
-                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
-                                                      style="background-color: ${role.color}20; color: ${role.color}">
-                                                    ${role.display_name}
-                                                </span>
-                                            `).join('')}
+                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
+                                                          style="background-color: ${role.color}20; color: ${role.color}">
+                                                        ${role.display_name}
+                                                    </span>
+                                                `).join('')}
                                         </div>
                                     </div>
                                 ` : ''}
-                                
-                                <div class="text-sm text-gray-500">
-                                    Total permissions: ${roleInfo.permission_count || permissions.length || 0}
+                                    
+                                    <div class="text-sm text-gray-500">
+                                        Total permissions: ${roleInfo.permission_count || permissions.length || 0}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ` : ''}
+                        ` : ''}
                 </div>
             `;
         }
@@ -1138,12 +1144,46 @@
             };
         }
 
+        // Resend verification email
+        async function resendVerification(userId) {
+            if (!confirm('このユーザーに認証メールを再送しますか？')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/admin/users/${userId}/resend-verification`, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showSuccess('認証メールを再送しました');
+                } else {
+                    showError(result.message || '認証メール再送に失敗しました');
+                }
+            } catch (error) {
+                console.error('Error resending verification email:', error);
+                showError('認証メール再送エラー: ' + error.message);
+            }
+        }
+
         // Render pagination
         function renderPagination(pagination) {
             const container = document.getElementById('pagination-container');
             if (!container || !pagination) return;
 
-            const { current_page, last_page, from, to, total } = pagination;
+            const {
+                current_page,
+                last_page,
+                from,
+                to,
+                total
+            } = pagination;
 
             if (last_page <= 1) {
                 container.innerHTML = '';
@@ -1157,17 +1197,17 @@
                     </div>
                     <div class="flex space-x-2">
                         ${current_page > 1 ? `
-                            <button onclick="loadUsers(${current_page - 1})" 
-                                    class="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
-                                Previous
-                            </button>
-                        ` : ''}
+                                <button onclick="loadUsers(${current_page - 1})" 
+                                        class="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                                    Previous
+                                </button>
+                            ` : ''}
                         ${current_page < last_page ? `
-                            <button onclick="loadUsers(${current_page + 1})" 
-                                    class="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
-                                Next
-                            </button>
-                        ` : ''}
+                                <button onclick="loadUsers(${current_page + 1})" 
+                                        class="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                                    Next
+                                </button>
+                            ` : ''}
                     </div>
                 </div>
             `;
