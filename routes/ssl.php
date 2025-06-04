@@ -6,6 +6,10 @@ use App\Http\Controllers\{
     SSLDashboardController,
     SquareWebhookController
 };
+use App\Http\Controllers\Admin\{
+    AdminRoleController,
+    AdminUserController
+};
 
 // SSL Web Routes - 認証必須
 Route::middleware(['auth', 'verified'])->prefix('ssl')->name('ssl.')->group(function () {
@@ -52,25 +56,58 @@ Route::middleware(['auth', 'verified'])->prefix('ssl')->name('ssl.')->group(func
     });
 });
 
-// Admin routes (requires admin role)
-Route::middleware(['auth', 'role:admin'])->prefix('admin/ssl')->name('admin.ssl.')->group(function () {
+// Admin routes (requires admin permissions)
+Route::middleware(['auth', 'permission:admin.access'])->prefix('admin')->name('admin.')->group(function () {
     
-    // System Administration
-    Route::get('system', [SSLDashboardController::class, 'systemOverview'])->name('system');
-    Route::get('providers/manage', function () {
-        return view('admin.ssl.providers.manage');
-    })->name('providers.manage');
+    // Admin Dashboard
+    Route::get('/', function () {
+        return view('admin.dashboard');
+    })->name('dashboard');
     
     // User Management
-    Route::get('users', [SSLDashboardController::class, 'userManagement'])->name('users');
-    Route::get('subscriptions/all', function () {
-        return view('admin.ssl.subscriptions.index');
-    })->name('subscriptions.all');
+    Route::middleware('permission:users.view_all')->group(function () {
+        Route::resource('users', AdminUserController::class);
+        Route::post('users/{user}/assign-role', [AdminUserController::class, 'assignRole'])->name('users.assign-role');
+        Route::delete('users/{user}/roles/{role}', [AdminUserController::class, 'removeRole'])->name('users.remove-role');
+        Route::post('users/bulk-update', [AdminUserController::class, 'bulkUpdate'])->name('users.bulk-update');
+        Route::get('users-statistics', [AdminUserController::class, 'statistics'])->name('users.statistics');
+    });
     
-    // System Health
-    Route::get('health/detailed', function () {
-        return view('admin.ssl.health.detailed');
-    })->name('health.detailed');
+    // Role Management
+    Route::middleware('permission:admin.roles.manage')->group(function () {
+        Route::resource('roles', AdminRoleController::class);
+        Route::post('roles/{role}/assign-user', [AdminRoleController::class, 'assignToUser'])->name('roles.assign-user');
+        Route::delete('roles/{role}/users', [AdminRoleController::class, 'removeFromUser'])->name('roles.remove-user');
+        Route::post('roles/bulk-assign', [AdminRoleController::class, 'bulkAssign'])->name('roles.bulk-assign');
+        Route::get('roles-statistics', [AdminRoleController::class, 'statistics'])->name('roles.statistics');
+    });
+    
+    // SSL System Administration
+    Route::middleware('permission:ssl.certificates.view_all')->prefix('ssl')->name('ssl.')->group(function () {
+        Route::get('system', [SSLDashboardController::class, 'systemOverview'])->name('system');
+        Route::get('providers/manage', function () {
+            return view('admin.ssl.providers.manage');
+        })->name('providers.manage');
+        
+        Route::get('subscriptions/all', function () {
+            return view('admin.ssl.subscriptions.index');
+        })->name('subscriptions.all');
+        
+        Route::get('health/detailed', function () {
+            return view('admin.ssl.health.detailed');
+        })->name('health.detailed');
+    });
+    
+    // System Management
+    Route::middleware('permission:system.health.view')->group(function () {
+        Route::get('system/health', function () {
+            return view('admin.system.health');
+        })->name('system.health');
+        
+        Route::get('system/logs', function () {
+            return view('admin.system.logs');
+        })->name('system.logs')->middleware('permission:system.logs.view');
+    });
 });
 
 // Webhook endpoint (no auth middleware)

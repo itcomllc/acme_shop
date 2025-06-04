@@ -29,7 +29,7 @@ class CreateSubscription extends Component
 
     public function addDomain(): void
     {
-        $selectedPlanData = $this->plans[$this->selectedPlan] ?? null;
+        $selectedPlanData = $this->getSelectedPlanDataProperty();
         
         if ($selectedPlanData && count($this->domains) < $selectedPlanData['max_domains']) {
             $this->domains[] = '';
@@ -101,7 +101,47 @@ class CreateSubscription extends Component
     public function canAddDomain(): bool
     {
         $planData = $this->getSelectedPlanDataProperty();
-        return $planData && count($this->domains) < $planData['max_domains'];
+        if (!$planData || !isset($planData['max_domains'])) {
+            return false;
+        }
+        
+        return count($this->domains) < $planData['max_domains'];
+    }
+
+    /**
+     * プランのドメイン制限数を取得
+     */
+    public function getMaxDomainsForPlan(): int
+    {
+        $planData = $this->getSelectedPlanDataProperty();
+        return $planData['max_domains'] ?? 1;
+    }
+
+    /**
+     * 残りドメイン数を取得
+     */
+    public function getRemainingDomains(): int
+    {
+        $maxDomains = $this->getMaxDomainsForPlan();
+        return max(0, $maxDomains - count($this->domains));
+    }
+
+    /**
+     * プラン変更時のドメイン調整
+     */
+    public function updatedSelectedPlan(): void
+    {
+        $maxDomains = $this->getMaxDomainsForPlan();
+        
+        // 現在のドメイン数がプラン制限を超えている場合は調整
+        if (count($this->domains) > $maxDomains) {
+            $this->domains = array_slice($this->domains, 0, $maxDomains);
+        }
+        
+        // 空のドメインスロットがない場合は1つ追加（制限内であれば）
+        if (count($this->domains) < $maxDomains && !in_array('', $this->domains)) {
+            $this->domains[] = '';
+        }
     }
 
     public function render()

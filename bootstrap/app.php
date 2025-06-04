@@ -16,6 +16,9 @@ return Application::configure(basePath: dirname(__DIR__))
             // SSL専用ルーティング
             Route::middleware('web')
                 ->group(base_path('routes/ssl.php'));
+            Route::middleware('api')
+                ->prefix('api')
+                ->group(base_path('routes/acme.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
@@ -33,6 +36,14 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // SSL関連のミドルウェア
         $middleware->alias([
+            'ssl.subscription.active' => \App\Http\Middleware\EnsureActiveSubscription::class,
+            'ssl.provider.available' => \App\Http\Middleware\EnsureProviderAvailable::class,
+        ]);
+    })
+    ->withMiddleware(function (Middleware $middleware) {
+        $middleware->alias([
+            'role' => \App\Http\Middleware\CheckRole::class,
+            'permission' => \App\Http\Middleware\CheckPermission::class,
             'ssl.subscription.active' => \App\Http\Middleware\EnsureActiveSubscription::class,
             'ssl.provider.available' => \App\Http\Middleware\EnsureProviderAvailable::class,
         ]);
