@@ -253,6 +253,83 @@
         </div>
     </div>
 
+    <!-- Edit User Modal -->
+    <div id="editUserModal"
+        class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-2/3 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Edit User</h3>
+                    <button onclick="closeEditUserModal()"
+                        class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                </div>
+
+                <form id="editUserForm" class="space-y-6">
+                    <input type="hidden" id="edit-user-id">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                            <input type="text" name="name" id="edit-user-name"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                            <input type="email" name="email" id="edit-user-email"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                required>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Primary Role</label>
+                            <select name="primary_role_id" id="edit-user-role"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">Select a role</option>
+                                <!-- Roles will be loaded here -->
+                            </select>
+                        </div>
+                        <div>
+                            <label class="flex items-center mt-6">
+                                <input type="checkbox" name="email_verified" id="edit-user-email-verified"
+                                    class="rounded mr-2">
+                                <span class="text-sm text-gray-900">Email verified</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="border-t pt-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Change Password (optional)</label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <input type="password" name="password" id="edit-user-password" placeholder="New password"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <input type="password" name="password_confirmation" id="edit-user-password-confirmation"
+                                    placeholder="Confirm new password"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="closeEditUserModal()"
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">
+                            Update User
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- User Details Modal -->
     <div id="userDetailsModal"
         class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
@@ -278,19 +355,72 @@
         </div>
     </div>
 
+    <!-- Bulk Actions Modal -->
+    <div id="bulkActionsModal"
+        class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Bulk Actions</h3>
+                    <button onclick="closeBulkActionsModal()"
+                        class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                </div>
+
+                <form id="bulkActionsForm" class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Action</label>
+                        <select name="action" id="bulk-action"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            required>
+                            <option value="">Select an action</option>
+                            <option value="verify_email">Verify Email</option>
+                            <option value="unverify_email">Unverify Email</option>
+                            <option value="assign_role">Assign Role</option>
+                        </select>
+                    </div>
+
+                    <div id="role-selection" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Role to Assign</label>
+                        <select name="role_id" id="bulk-role"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">Select a role</option>
+                            <!-- Roles will be loaded here -->
+                        </select>
+                    </div>
+
+                    <div>
+                        <p class="text-sm text-gray-600">
+                            <span id="selected-users-count">0</span> users selected
+                        </p>
+                    </div>
+
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="closeBulkActionsModal()"
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">
+                            Apply Actions
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Global variables
         let currentPage = 1;
         let allUsers = [];
         let allRoles = [];
+        let filteredUsers = [];
 
         // Initialize the page
         document.addEventListener('DOMContentLoaded', function() {
             loadUsers();
             loadRoles();
             loadStatistics();
-
-            // Setup event listeners
             setupEventListeners();
         });
 
@@ -304,10 +434,23 @@
             document.getElementById('select-all-users').addEventListener('change', function() {
                 const checkboxes = document.querySelectorAll('.user-checkbox');
                 checkboxes.forEach(cb => cb.checked = this.checked);
+                updateSelectedCount();
             });
 
             // Form submissions
             document.getElementById('createUserForm').addEventListener('submit', handleCreateUser);
+            document.getElementById('editUserForm').addEventListener('submit', handleEditUser);
+            document.getElementById('bulkActionsForm').addEventListener('submit', handleBulkActions);
+
+            // Bulk action role selection
+            document.getElementById('bulk-action').addEventListener('change', function() {
+                const roleSelection = document.getElementById('role-selection');
+                if (this.value === 'assign_role') {
+                    roleSelection.classList.remove('hidden');
+                } else {
+                    roleSelection.classList.add('hidden');
+                }
+            });
         }
 
         // Load users data
@@ -331,17 +474,10 @@
                     throw new Error(data.message || 'Failed to load users');
                 }
 
-                // Check if data is an array
-                if (Array.isArray(data.data)) {
-                    allUsers = data.data;
-                } else {
-                    console.error('Expected array but got:', typeof data.data, data.data);
-                    throw new Error('Invalid data format received from server');
-                }
+                allUsers = Array.isArray(data.data) ? data.data : [];
+                filteredUsers = [...allUsers];
+                renderUsers(filteredUsers);
 
-                renderUsers(allUsers);
-
-                // Handle pagination if present
                 if (data.pagination) {
                     renderPagination(data.pagination);
                 }
@@ -371,19 +507,18 @@
 
                 const data = await response.json();
 
-                if (!data.success) {
-                    throw new Error(data.message || 'Failed to load roles');
-                }
-
-                // Handle different response structures
-                if (Array.isArray(data.data)) {
-                    allRoles = data.data;
-                } else if (data.data && Array.isArray(data.data.data)) {
-                    allRoles = data.data.data;
-                } else if (data.data && data.data.roles && Array.isArray(data.data.roles.data)) {
-                    allRoles = data.data.roles.data;
+                if (data.success) {
+                    // Handle different response structures
+                    if (Array.isArray(data.data)) {
+                        allRoles = data.data;
+                    } else if (data.data && Array.isArray(data.data.data)) {
+                        allRoles = data.data.data;
+                    } else if (data.data && data.data.roles && Array.isArray(data.data.roles.data)) {
+                        allRoles = data.data.roles.data;
+                    } else {
+                        allRoles = [];
+                    }
                 } else {
-                    console.error('Unexpected roles data structure:', data.data);
                     allRoles = [];
                 }
 
@@ -391,7 +526,7 @@
             } catch (error) {
                 console.error('Error loading roles:', error);
                 allRoles = [];
-                populateRoleSelects(); // Still populate with empty array
+                populateRoleSelects();
             }
         }
 
@@ -405,22 +540,23 @@
                     }
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        const stats = data.data;
+                        document.getElementById('total-users-count').textContent = stats.total_users || 0;
+                        document.getElementById('verified-users-count').textContent = stats.verified_users || 0;
+                        document.getElementById('subscription-users-count').textContent = stats.users_with_subscriptions || 0;
+                        document.getElementById('new-users-count').textContent = stats.recent_registrations || 0;
+                        return;
+                    }
                 }
-
-                const data = await response.json();
-
-                if (!data.success) {
-                    throw new Error(data.message || 'Failed to load statistics');
-                }
-
-                const stats = data.data;
-
-                document.getElementById('total-users-count').textContent = stats.total_users || 0;
-                document.getElementById('verified-users-count').textContent = stats.verified_users || 0;
-                document.getElementById('subscription-users-count').textContent = stats.users_with_subscriptions || 0;
-                document.getElementById('new-users-count').textContent = stats.recent_registrations || 0;
+                
+                // Set default values on error
+                document.getElementById('total-users-count').textContent = '0';
+                document.getElementById('verified-users-count').textContent = '0';
+                document.getElementById('subscription-users-count').textContent = '0';
+                document.getElementById('new-users-count').textContent = '0';
             } catch (error) {
                 console.error('Error loading statistics:', error);
                 // Set default values on error
@@ -433,28 +569,36 @@
 
         // Populate role select options
         function populateRoleSelects() {
-            const filterSelect = document.getElementById('filter-role');
-            const createUserSelect = document.getElementById('user-role');
+            const selects = [
+                document.getElementById('filter-role'),
+                document.getElementById('user-role'),
+                document.getElementById('edit-user-role'),
+                document.getElementById('bulk-role')
+            ];
 
-            // Clear existing options (except the first default option)
-            filterSelect.innerHTML = '<option value="">All Roles</option>';
-            createUserSelect.innerHTML = '<option value="">Select a role</option>';
+            selects.forEach((select, index) => {
+                if (!select) return;
 
-            if (Array.isArray(allRoles) && allRoles.length > 0) {
-                allRoles.forEach(role => {
-                    // Filter dropdown
-                    const filterOption = document.createElement('option');
-                    filterOption.value = role.name;
-                    filterOption.textContent = role.display_name;
-                    filterSelect.appendChild(filterOption);
+                // Clear existing options except the first default one
+                if (index === 0) { // filter-role
+                    select.innerHTML = '<option value="">All Roles</option>';
+                } else {
+                    select.innerHTML = '<option value="">Select a role</option>';
+                }
 
-                    // Create user dropdown
-                    const createOption = document.createElement('option');
-                    createOption.value = role.id;
-                    createOption.textContent = role.display_name;
-                    createUserSelect.appendChild(createOption);
-                });
-            }
+                if (Array.isArray(allRoles) && allRoles.length > 0) {
+                    allRoles.forEach(role => {
+                        const option = document.createElement('option');
+                        if (index === 0) { // filter-role uses name
+                            option.value = role.name;
+                        } else { // others use id
+                            option.value = role.id;
+                        }
+                        option.textContent = role.display_name;
+                        select.appendChild(option);
+                    });
+                }
+            });
         }
 
         // Render users table
@@ -467,73 +611,494 @@
             }
 
             tbody.innerHTML = users.map(user => `
-        <tr class="hover:bg-gray-50">
-            <td class="px-6 py-4 whitespace-nowrap">
-                <input type="checkbox" class="user-checkbox rounded" value="${user.id}">
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex items-center">
-                    <img class="h-10 w-10 rounded-full border" 
-                         src="https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&color=7F9CF5&background=EBF4FF" 
-                         alt="${user.name}">
-                    <div class="ml-4">
-                        <div class="text-sm font-medium text-gray-900">${user.name}</div>
-                        <div class="text-sm text-gray-500">${user.email}</div>
-                    </div>
-                </div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex flex-col">
-                    ${user.primary_role ? `
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
-                                  style="background-color: ${user.primary_role.color}20; color: ${user.primary_role.color}">
-                                ${user.primary_role.display_name}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <input type="checkbox" class="user-checkbox rounded" value="${user.id}" onchange="updateSelectedCount()">
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <img class="h-10 w-10 rounded-full border" 
+                                 src="https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&color=7F9CF5&background=EBF4FF" 
+                                 alt="${user.name}">
+                            <div class="ml-4">
+                                <div class="text-sm font-medium text-gray-900">${user.name}</div>
+                                <div class="text-sm text-gray-500">${user.email}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex flex-col">
+                            ${user.primary_role ? `
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
+                                      style="background-color: ${user.primary_role.color}20; color: ${user.primary_role.color}">
+                                    ${user.primary_role.display_name}
+                                </span>
+                            ` : '<span class="text-sm text-gray-400">No role assigned</span>'}
+                            ${user.roles_count > 1 ? `<span class="text-xs text-gray-500 mt-1">+${user.roles_count - 1} more</span>` : ''}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex flex-col space-y-1">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                user.email_verified_at ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                            }">
+                                ${user.email_verified_at ? 'Verified' : 'Unverified'}
                             </span>
-                        ` : '<span class="text-sm text-gray-400">No role assigned</span>'}
-                    ${user.roles_count > 1 ? `<span class="text-xs text-gray-500 mt-1">+${user.roles_count - 1} more</span>` : ''}
-                </div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap">
-                <div class="flex flex-col space-y-1">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.email_verified_at ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                    }">
-                        ${user.email_verified_at ? 'Verified' : 'Unverified'}
-                    </span>
-                    ${user.subscriptions_count > 0 ? `
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                ${user.subscriptions_count} subscription${user.subscriptions_count > 1 ? 's' : ''}
-                            </span>
-                        ` : ''}
-                </div>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                ${user.subscriptions_count || 0}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${new Date(user.created_at).toLocaleDateString()}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                <div class="flex space-x-2">
-                    <button onclick="viewUser(${user.id})" 
-                            class="text-blue-600 hover:text-blue-900">View</button>
-                    <button onclick="editUser(${user.id})" 
-                            class="text-green-600 hover:text-green-900">Edit</button>
-                    ${user.id !== 1 ? `
-                            <button onclick="deleteUser(${user.id})" 
-                                    class="text-red-600 hover:text-red-900">Delete</button>
-                        ` : ''}
-                </div>
-            </td>
-        </tr>
-    `).join('');
+                            ${user.subscriptions_count > 0 ? `
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    ${user.subscriptions_count} subscription${user.subscriptions_count > 1 ? 's' : ''}
+                                </span>
+                            ` : ''}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${user.subscriptions_count || 0}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${new Date(user.created_at).toLocaleDateString()}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div class="flex space-x-2">
+                            <button onclick="viewUser(${user.id})" 
+                                    class="text-blue-600 hover:text-blue-900">View</button>
+                            <button onclick="editUser(${user.id})" 
+                                    class="text-green-600 hover:text-green-900">Edit</button>
+                            ${user.id !== 1 && !user.is_super_admin ? `
+                                <button onclick="deleteUser(${user.id})" 
+                                        class="text-red-600 hover:text-red-900">Delete</button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
 
-            // Make sure table is visible
             document.getElementById('users-table').classList.remove('hidden');
             document.getElementById('users-empty').classList.add('hidden');
         }
 
+        // Filter users
+        function filterUsers() {
+            const search = document.getElementById('search-users').value.toLowerCase();
+            const roleFilter = document.getElementById('filter-role').value;
+            const statusFilter = document.getElementById('filter-status').value;
+
+            filteredUsers = allUsers.filter(user => {
+                // Search filter
+                const matchesSearch = !search || 
+                    user.name.toLowerCase().includes(search) ||
+                    user.email.toLowerCase().includes(search);
+
+                // Role filter
+                const matchesRole = !roleFilter || 
+                    (user.primary_role && user.primary_role.name === roleFilter);
+
+                // Status filter
+                let matchesStatus = true;
+                switch (statusFilter) {
+                    case 'verified':
+                        matchesStatus = !!user.email_verified_at;
+                        break;
+                    case 'unverified':
+                        matchesStatus = !user.email_verified_at;
+                        break;
+                    case 'active_subscription':
+                        matchesStatus = user.subscriptions_count > 0;
+                        break;
+                }
+
+                return matchesSearch && matchesRole && matchesStatus;
+            });
+
+            renderUsers(filteredUsers);
+        }
+
+        // Handle create user form submission
+        async function handleCreateUser(event) {
+            event.preventDefault();
+            
+            const formData = new FormData(event.target);
+            const userData = {
+                name: formData.get('name'),
+                email: formData.get('email'),
+                password: formData.get('password'),
+                password_confirmation: formData.get('password_confirmation'),
+                role_id: formData.get('role_id'),
+                email_verified: formData.has('email_verified')
+            };
+
+            try {
+                const response = await fetch('/admin/users', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify(userData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showSuccess('User created successfully');
+                    closeCreateUserModal();
+                    loadUsers();
+                    loadStatistics();
+                } else {
+                    if (result.errors) {
+                        const errorMessages = Object.values(result.errors).flat().join(', ');
+                        showError(errorMessages);
+                    } else {
+                        showError(result.message || 'Failed to create user');
+                    }
+                }
+            } catch (error) {
+                console.error('Error creating user:', error);
+                showError('Failed to create user: ' + error.message);
+            }
+        }
+
+        // View user details
+        async function viewUser(userId) {
+            try {
+                const response = await fetch(`/admin/users/${userId}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load user details');
+
+                const data = await response.json();
+
+                if (data.success) {
+                    renderUserDetails(data.data);
+                    document.getElementById('userDetailsModal').classList.remove('hidden');
+                } else {
+                    showError(data.message || 'Failed to load user details');
+                }
+            } catch (error) {
+                console.error('Error loading user details:', error);
+                showError('Failed to load user details: ' + error.message);
+            }
+        }
+
+        // Edit user
+        async function editUser(userId) {
+            try {
+                const response = await fetch(`/admin/users/${userId}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load user');
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const user = data.data.user || data.data;
+                    
+                    // Populate edit form
+                    document.getElementById('edit-user-id').value = user.id;
+                    document.getElementById('edit-user-name').value = user.name;
+                    document.getElementById('edit-user-email').value = user.email;
+                    document.getElementById('edit-user-role').value = user.primary_role ? user.primary_role.id : '';
+                    document.getElementById('edit-user-email-verified').checked = !!user.email_verified_at;
+                    
+                    document.getElementById('editUserModal').classList.remove('hidden');
+                } else {
+                    showError(data.message || 'Failed to load user');
+                }
+            } catch (error) {
+                console.error('Error loading user:', error);
+                showError('Failed to load user: ' + error.message);
+            }
+        }
+
+        // Handle edit user form submission
+        async function handleEditUser(event) {
+            event.preventDefault();
+            
+            const userId = document.getElementById('edit-user-id').value;
+            const formData = new FormData(event.target);
+            
+            const userData = {
+                name: formData.get('name'),
+                email: formData.get('email'),
+                primary_role_id: formData.get('primary_role_id') || null,
+                email_verified: formData.has('email_verified')
+            };
+
+            // Include password if provided
+            const password = formData.get('password');
+            if (password) {
+                userData.password = password;
+                userData.password_confirmation = formData.get('password_confirmation');
+            }
+
+            try {
+                const response = await fetch(`/admin/users/${userId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify(userData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showSuccess('User updated successfully');
+                    closeEditUserModal();
+                    loadUsers();
+                    loadStatistics();
+                } else {
+                    if (result.errors) {
+                        const errorMessages = Object.values(result.errors).flat().join(', ');
+                        showError(errorMessages);
+                    } else {
+                        showError(result.message || 'Failed to update user');
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating user:', error);
+                showError('Failed to update user: ' + error.message);
+            }
+        }
+
+        // Delete user
+        async function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/admin/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showSuccess('User deleted successfully');
+                    loadUsers();
+                    loadStatistics();
+                } else {
+                    showError(result.message || 'Failed to delete user');
+                }
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                showError('Failed to delete user: ' + error.message);
+            }
+        }
+
+        // Bulk actions
+        function bulkActionModal() {
+            const checkedBoxes = document.querySelectorAll('.user-checkbox:checked');
+            if (checkedBoxes.length === 0) {
+                showError('Please select at least one user');
+                return;
+            }
+            
+            updateSelectedCount();
+            document.getElementById('bulkActionsModal').classList.remove('hidden');
+        }
+
+        // Handle bulk actions form submission
+        async function handleBulkActions(event) {
+            event.preventDefault();
+            
+            const formData = new FormData(event.target);
+            const checkedBoxes = document.querySelectorAll('.user-checkbox:checked');
+            const userIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+            
+            const bulkData = {
+                user_ids: userIds,
+                action: formData.get('action')
+            };
+
+            if (formData.get('action') === 'assign_role') {
+                bulkData.role_id = formData.get('role_id');
+            }
+
+            try {
+                const response = await fetch('/admin/users/bulk-update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify(bulkData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showSuccess(result.message);
+                    closeBulkActionsModal();
+                    loadUsers();
+                    loadStatistics();
+                } else {
+                    showError(result.message || 'Bulk action failed');
+                }
+            } catch (error) {
+                console.error('Error performing bulk action:', error);
+                showError('Bulk action failed: ' + error.message);
+            }
+        }
+
+        // Update selected count
+        function updateSelectedCount() {
+            const checkedBoxes = document.querySelectorAll('.user-checkbox:checked');
+            const countElement = document.getElementById('selected-users-count');
+            if (countElement) {
+                countElement.textContent = checkedBoxes.length;
+            }
+        }
+
+        // Render user details
+        function renderUserDetails(data) {
+            const user = data.user || data;
+            const stats = data.stats || {};
+            const roleInfo = data.role_info || {};
+            const permissions = data.permissions || [];
+
+            const content = document.getElementById('user-details-content');
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <!-- Basic Info -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-3">Basic Information</h4>
+                            <dl class="space-y-2">
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Name</dt>
+                                    <dd class="text-sm text-gray-900">${user.name}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Email</dt>
+                                    <dd class="text-sm text-gray-900">${user.email}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Email Status</dt>
+                                    <dd class="text-sm">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                            user.email_verified_at ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                        }">
+                                            ${user.email_verified_at ? 'Verified' : 'Unverified'}
+                                        </span>
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Created</dt>
+                                    <dd class="text-sm text-gray-900">${new Date(user.created_at).toLocaleString()}</dd>
+                                </div>
+                            </dl>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-3">Account Statistics</h4>
+                            <dl class="space-y-2">
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Subscriptions</dt>
+                                    <dd class="text-sm text-gray-900">${stats.total_subscriptions || 0}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Active Subscriptions</dt>
+                                    <dd class="text-sm text-gray-900">${stats.active_subscriptions || 0}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Certificates</dt>
+                                    <dd class="text-sm text-gray-900">${stats.total_certificates || 0}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Account Age</dt>
+                                    <dd class="text-sm text-gray-900">${stats.account_age_days || 0} days</dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </div>
+
+                    <!-- Role Information -->
+                    ${roleInfo.primary_role || (roleInfo.all_roles && roleInfo.all_roles.length > 0) ? `
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-3">Roles & Permissions</h4>
+                            <div class="space-y-3">
+                                ${roleInfo.primary_role ? `
+                                    <div>
+                                        <span class="text-sm font-medium text-gray-500">Primary Role:</span>
+                                        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
+                                              style="background-color: ${roleInfo.primary_role.color}20; color: ${roleInfo.primary_role.color}">
+                                            ${roleInfo.primary_role.display_name}
+                                        </span>
+                                    </div>
+                                ` : ''}
+                                
+                                ${roleInfo.all_roles && roleInfo.all_roles.length > 0 ? `
+                                    <div>
+                                        <span class="text-sm font-medium text-gray-500">All Roles:</span>
+                                        <div class="mt-1 flex flex-wrap gap-1">
+                                            ${roleInfo.all_roles.map(role => `
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
+                                                      style="background-color: ${role.color}20; color: ${role.color}">
+                                                    ${role.display_name}
+                                                </span>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                
+                                <div class="text-sm text-gray-500">
+                                    Total permissions: ${roleInfo.permission_count || permissions.length || 0}
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // Modal functions
+        function showCreateUserModal() {
+            document.getElementById('createUserModal').classList.remove('hidden');
+        }
+
+        function closeCreateUserModal() {
+            document.getElementById('createUserModal').classList.add('hidden');
+            document.getElementById('createUserForm').reset();
+        }
+
+        function closeEditUserModal() {
+            document.getElementById('editUserModal').classList.add('hidden');
+            document.getElementById('editUserForm').reset();
+        }
+
+        function closeUserDetailsModal() {
+            document.getElementById('userDetailsModal').classList.add('hidden');
+        }
+
+        function closeBulkActionsModal() {
+            document.getElementById('bulkActionsModal').classList.add('hidden');
+            document.getElementById('bulkActionsForm').reset();
+            document.getElementById('role-selection').classList.add('hidden');
+        }
+
         // Utility functions
+        function refreshUsers() {
+            loadUsers();
+            loadStatistics();
+        }
+
         function showLoading() {
             document.getElementById('users-loading').classList.remove('hidden');
             document.getElementById('users-table').classList.add('hidden');
@@ -578,13 +1143,7 @@
             const container = document.getElementById('pagination-container');
             if (!container || !pagination) return;
 
-            const {
-                current_page,
-                last_page,
-                from,
-                to,
-                total
-            } = pagination;
+            const { current_page, last_page, from, to, total } = pagination;
 
             if (last_page <= 1) {
                 container.innerHTML = '';
@@ -592,58 +1151,26 @@
             }
 
             container.innerHTML = `
-        <div class="flex items-center justify-between">
-            <div class="text-sm text-gray-700">
-                Showing ${from} to ${to} of ${total} results
-            </div>
-            <div class="flex space-x-2">
-                ${current_page > 1 ? `
-                        <button onclick="loadUsers(${current_page - 1})" 
-                                class="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
-                            Previous
-                        </button>
-                    ` : ''}
-                ${current_page < last_page ? `
-                        <button onclick="loadUsers(${current_page + 1})" 
-                                class="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
-                            Next
-                        </button>
-                    ` : ''}
-            </div>
-        </div>
-    `;
-        }
-
-        // Placeholder functions for other operations
-        function filterUsers() {
-            // Implement filtering logic
-            console.log('Filter users');
-        }
-
-        function refreshUsers() {
-            loadUsers();
-            loadStatistics();
-        }
-
-        function viewUser(userId) {
-            console.log('View user:', userId);
-        }
-
-        function editUser(userId) {
-            console.log('Edit user:', userId);
-        }
-
-        function deleteUser(userId) {
-            console.log('Delete user:', userId);
-        }
-
-        function handleCreateUser(event) {
-            event.preventDefault();
-            console.log('Create user');
-        }
-
-        function bulkActionModal() {
-            console.log('Bulk actions');
+                <div class="flex items-center justify-between">
+                    <div class="text-sm text-gray-700">
+                        Showing ${from} to ${to} of ${total} results
+                    </div>
+                    <div class="flex space-x-2">
+                        ${current_page > 1 ? `
+                            <button onclick="loadUsers(${current_page - 1})" 
+                                    class="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                                Previous
+                            </button>
+                        ` : ''}
+                        ${current_page < last_page ? `
+                            <button onclick="loadUsers(${current_page + 1})" 
+                                    class="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                                Next
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
         }
     </script>
 </x-layouts.admin>
