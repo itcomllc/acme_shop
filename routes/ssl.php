@@ -165,7 +165,7 @@ if (!app()->environment('production')) {
 
 
 Route::middleware('auth')->get('/debug-permissions', function () {
-    $user = auth()->user();
+    $user = Auth::user();
     
     if (!$user) {
         return 'Not authenticated';
