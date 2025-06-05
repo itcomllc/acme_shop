@@ -687,9 +687,8 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
         $validator = Validator::make($request->all(), [
             'role_ids' => ['required', 'array', 'max:100'],
             'role_ids.*' => ['integer', 'exists:roles,id'],
-            'action' => ['required', 'in:activate,deactivate,delete,assign_permissions,sync_permissions'],
-            'permission_ids' => ['required_if:action,assign_permissions', 'array'],
-            'permission_ids.*' => ['exists:permissions,id']
+            'action' => ['required', 'in:activate,deactivate,delete,sync_permissions'],
+            'template_role_id' => ['required_if:action,sync_permissions', 'integer', 'exists:roles,id']
         ]);
 
         if ($validator->fails()) {
@@ -703,8 +702,23 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
         try {
             $roles = Role::whereIn('id', $request->role_ids)->get();
             $results = [];
+            $templateRole = null;
 
-            DB::transaction(function () use ($roles, $request, &$results) {
+            // Load template role if sync_permissions action
+            if ($request->action === 'sync_permissions') {
+                /** @var Role $templateRole */
+                $templateRole = Role::with('permissions')->findOrFail($request->template_role_id);
+                
+                // Verify template role exists and has permissions
+                if (!$templateRole) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Template role not found'
+                    ], 404);
+                }
+            }
+
+            DB::transaction(function () use ($roles, $request, $templateRole, &$results) {
                 foreach ($roles as $role) {
                     // Skip system roles for destructive actions
                     if (($role->metadata['system'] ?? false) && in_array($request->action, ['delete', 'deactivate'])) {
@@ -717,14 +731,27 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
                         continue;
                     }
 
+                    // Skip template role in sync_permissions to avoid self-sync
+                    if ($request->action === 'sync_permissions' && $role->id === $templateRole->id) {
+                        $results[] = [
+                            'role_id' => $role->id,
+                            'role_name' => $role->name,
+                            'status' => 'skipped',
+                            'reason' => 'Cannot sync role with itself'
+                        ];
+                        continue;
+                    }
+
                     try {
                         switch ($request->action) {
                             case 'activate':
                                 $role->update(['is_active' => true]);
                                 break;
+                                
                             case 'deactivate':
                                 $role->update(['is_active' => false]);
                                 break;
+                                
                             case 'delete':
                                 if ($role->users()->count() === 0) {
                                     $role->permissions()->detach();
@@ -733,8 +760,25 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
                                     throw new \Exception('Role has assigned users');
                                 }
                                 break;
-                            case 'assign_permissions':
-                                $role->permissions()->sync($request->permission_ids);
+                                
+                            case 'sync_permissions':
+                                // Get template role's permission IDs
+                                $templatePermissionIds = $templateRole->permissions->pluck('id')->toArray();
+                                
+                                // Sync permissions from template role
+                                $role->permissions()->sync($templatePermissionIds);
+                                
+                                // Clear permission cache for this role
+                                $role->clearPermissionCache();
+                                
+                                Log::info('Role permissions synced from template', [
+                                    'role_id' => $role->id,
+                                    'role_name' => $role->name,
+                                    'template_role_id' => $templateRole->id,
+                                    'template_role_name' => $templateRole->name,
+                                    'permission_count' => count($templatePermissionIds),
+                                    'admin_id' => Auth::id()
+                                ]);
                                 break;
                         }
 
@@ -762,7 +806,8 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
                 'action' => $request->action,
                 'successful' => $successful,
                 'failed' => $failed,
-                'skipped' => $skipped
+                'skipped' => $skipped,
+                'template_role' => $templateRole ? $templateRole->name : null
             ]);
 
             return response()->json([
