@@ -31,40 +31,42 @@ Schedule::command('ssl:compare-providers --verbose --export=json')
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/ssl-daily-report.log'));
 
+
 // Clean up old certificate records - Weekly on Sunday
-Schedule::command('ssl:cleanup-certificates')
-    ->weeklyOn(0, '02:00') // Sunday at 2 AM
-    ->withoutOverlapping()
-    ->runInBackground();
+//Schedule::command('ssl:cleanup-certificates')
+//    ->weeklyOn(0, '02:00') // Sunday at 2 AM
+//    ->withoutOverlapping()
+//    ->runInBackground();
+
 
 // Test provider connections - Every 4 hours
-Schedule::command('ssl:test-providers')
-    ->cron('0 */4 * * *')
-    ->withoutOverlapping()
-    ->runInBackground()
-    ->appendOutputTo(storage_path('logs/ssl-provider-tests.log'));
+//Schedule::command('ssl:test-providers')
+//    ->cron('0 */4 * * *')
+//    ->withoutOverlapping()
+//    ->runInBackground()
+//    ->appendOutputTo(storage_path('logs/ssl-provider-tests.log'));
 
 // SSL statistics and usage report - Weekly on Monday
-Schedule::command('ssl:generate-usage-report')
-    ->weeklyOn(1, '08:00') // Monday at 8 AM
-    ->withoutOverlapping()
-    ->runInBackground();
+//Schedule::command('ssl:generate-usage-report')
+//    ->weeklyOn(1, '08:00') // Monday at 8 AM
+//    ->withoutOverlapping()
+//    ->runInBackground();
 
 // Emergency certificate validation check - Every 15 minutes during business hours
-Schedule::command('ssl:emergency-validation-check')
-    ->cron('*/15 9-17 * * 1-5') // Every 15 minutes, 9 AM - 5 PM, weekdays
-    ->withoutOverlapping()
-    ->runInBackground()
-    ->when(function () {
-        // Only run if there are failed certificates
-        return Certificate::where('status', 'failed')->exists();
-    });
+//Schedule::command('ssl:emergency-validation-check')
+//    ->cron('*/15 9-17 * * 1-5') // Every 15 minutes, 9 AM - 5 PM, weekdays
+//    ->withoutOverlapping()
+//    ->runInBackground()
+//    ->when(function () {
+//        // Only run if there are failed certificates
+//        return Certificate::where('status', 'failed')->exists();
+//    });
 
 // Subscription billing alignment check - Daily at midnight
-Schedule::command('subscription:check-billing')
-    ->daily()
-    ->withoutOverlapping()
-    ->runInBackground();
+//Schedule::command('subscription:check-billing')
+//    ->daily()
+//    ->withoutOverlapping()
+//    ->runInBackground();
 
 // Application health check - Every 30 minutes
 Schedule::call(function () {
@@ -111,13 +113,13 @@ if (!app()->environment('production')) {
 }
 
 // Maintenance mode SSL services
-Schedule::command('ssl:maintenance-check')
-    ->everyFiveMinutes()
-    ->when(function () {
-        return app()->isDownForMaintenance();
-    })
-    ->withoutOverlapping()
-    ->runInBackground();
+//Schedule::command('ssl:maintenance-check')
+//    ->everyFiveMinutes()
+//    ->when(function () {
+//        return app()->isDownForMaintenance();
+//    })
+//    ->withoutOverlapping()
+//    ->runInBackground();
 
 // Provider failover check - Every 10 minutes
 Schedule::call(function () {

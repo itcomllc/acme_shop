@@ -14,7 +14,6 @@ class TestSquareConnection extends Command
                             {--create-test-product : Create a test product (sandbox only)}
                             {--list-locations : List all available locations}
                             {--test-payments : Test payment processing capabilities}
-                            {--verbose : Show detailed output}
                             {--silent : Minimal output mode}
                             {--notify : Send Slack notifications on failures}';
     

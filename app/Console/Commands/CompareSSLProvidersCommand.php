@@ -14,7 +14,6 @@ class CompareSSLProvidersCommand extends Command
                             {--domain=example.com : Domain to test certificate issuance}
                             {--include-costs : Include cost comparison}
                             {--export= : Export results to file (json, csv)}
-                            {--verbose : Show detailed comparison}
                             {--notify : Send Slack notifications}';
 
     protected $description = 'Compare SSL certificate providers (GoGetSSL vs Google Certificate Manager)';

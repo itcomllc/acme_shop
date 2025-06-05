@@ -12,7 +12,6 @@ class TestGoGetSSLConnectionCommand extends Command
     protected $signature = 'gogetssl:test-connection 
                             {--clear-cache : Clear auth cache before testing} 
                             {--domain= : Test domain email retrieval}
-                            {--verbose : Show detailed output}
                             {--silent : Minimal output mode}
                             {--notify : Send Slack notifications on failures}';
     
