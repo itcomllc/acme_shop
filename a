@@ -1,0 +1,223 @@
+diff --git a/app/Console/Commands/MonitorCertificatesCommand.php b/app/Console/Commands/MonitorCertificatesCommand.php
+index 10a8b96..efe8a8b 100644
+--- a/app/Console/Commands/MonitorCertificatesCommand.php
++++ b/app/Console/Commands/MonitorCertificatesCommand.php
+@@ -7,7 +7,8 @@
+ use App\Jobs\ScheduleCertificateRenewal;
+ use App\Events\CertificateExpiring;
+ use App\Services\EnhancedSSLSaaSService;
+-use Illuminate\Support\Facades\{Log, Cache};
++use App\Notifications\SSLSystemAlertNotification;
++use Illuminate\Support\Facades\{Log, Cache, Notification};
+ 
+ class MonitorCertificatesCommand extends Command
+ {
+@@ -31,6 +32,12 @@ public function handle(): int
+         $this->info('🔍 Starting SSL Certificate Monitoring');
+         $this->newLine();
+ 
++        // 構造化ログ
++        Log::info('SSL Certificate Monitoring started', [
++            'command' => 'ssl:monitor-certificates',
++            'options' => $this->options()
++        ]);
++
+         // Check if monitoring was recently run (prevent duplicate runs)
+         if (!$this->option('force') && $this->wasRecentlyRun()) {
+             $this->info('⏭️  Monitoring was recently run. Use --force to override.');
+@@ -65,12 +72,20 @@ public function handle(): int
+                 $stats['provider_issues'] = $providerStats['unhealthy_providers'];
+             }
+ 
++            // 異常検知とSlack通知
++            $this->detectAnomaliesAndNotify($stats);
++
+             // Display summary
+             $this->displaySummary($stats);
+ 
+             // Update cache with monitoring results
+             $this->cacheMonitoringResults($stats);
+ 
++            // 構造化ログ
++            Log::info('SSL Certificate Monitoring completed', array_merge($stats, [
++                'status' => 'success'
++            ]));
++
+             $this->info('✅ Certificate monitoring completed successfully');
+             return self::SUCCESS;
+ 
+@@ -82,6 +97,18 @@ public function handle(): int
+                 'trace' => $e->getTraceAsString()
+             ]);
+ 
++            // 重大エラーのSlack通知
++            $this->sendSlackAlert(
++                'SSL Monitoring System Error',
++                'SSL monitoring command failed with exception',
++                [
++                    'Error' => $e->getMessage(),
++                    'File' => $e->getFile() . ':' . $e->getLine(),
++                    'Command' => $this->signature
++                ],
++                'critical'
++            );
++
+             return self::FAILURE;
+         } finally {
+             $this->markAsCompleted();
+@@ -185,6 +212,7 @@ private function checkProviderHealth(): array
+ 
+         $healthResults = $this->sslService->performHealthCheck();
+         $unhealthyProviders = 0;
++        $providerDetails = [];
+ 
+         foreach ($healthResults as $provider => $result) {
+             $status = $result['status'] ?? 'unknown';
+@@ -198,13 +226,117 @@ private function checkProviderHealth(): array
+             
+             if (in_array($status, ['failed', 'error'])) {
+                 $unhealthyProviders++;
++                $providerDetails[$provider] = $result['error'] ?? 'Unknown error';
++                
+                 if ($this->option('verbose') && isset($result['error'])) {
+                     $this->line("      Error: {$result['error']}");
+                 }
+             }
+         }
+ 
+-        return ['unhealthy_providers' => $unhealthyProviders];
++        return [
++            'unhealthy_providers' => $unhealthyProviders,
++            'provider_details' => $providerDetails,
++            'health_results' => $healthResults
++        ];
++    }
++
++    /**
++     * 異常検知とSlack通知
++     */
++    private function detectAnomaliesAndNotify(array $stats): void
++    {
++        if (!config('ssl-enhanced.monitoring.alert_on_failure', true)) {
++            return;
++        }
++
++        // 失敗した証明書の検知
++        if ($stats['failed_certificates'] > 0) {
++            $this->sendSlackAlert(
++                'Certificate Failures Detected',
++                "Found {$stats['failed_certificates']} failed certificates that require attention",
++                [
++                    'Failed Certificates' => $stats['failed_certificates'],
++                    'Total Certificates' => $stats['total_certificates'],
++                    'Failure Rate' => round(($stats['failed_certificates'] / max($stats['total_certificates'], 1)) * 100, 1) . '%'
++                ],
++                'error'
++            );
++        }
++
++        // 大量の期限切れ間近証明書の検知
++        $expiringThreshold = 10; // 設定可能にする
++        if ($stats['expiring_certificates'] > $expiringThreshold) {
++            $this->sendSlackAlert(
++                'Many Certificates Expiring Soon',
++                "Warning: {$stats['expiring_certificates']} certificates expiring within {$this->option('days')} days",
++                [
++                    'Expiring Soon' => $stats['expiring_certificates'],
++                    'Auto Renewal Scheduled' => $stats['renewals_scheduled'],
++                    'Threshold' => $expiringThreshold
++                ],
++                'warning'
++            );
++        }
++
++        // プロバイダーヘルスの問題検知
++        if ($stats['provider_issues'] > 0) {
++            $this->sendSlackAlert(
++                'SSL Provider Health Issues',
++                "{$stats['provider_issues']} SSL providers are experiencing connectivity or health issues",
++                [
++                    'Unhealthy Providers' => $stats['provider_issues'],
++                    'Impact' => 'New certificate issuance may be affected'
++                ],
++                'critical'
++            );
++        }
++
++        // 成功時の定期報告（1日1回）
++        if ($this->shouldSendDailyReport($stats)) {
++            $this->sendSlackAlert(
++                'SSL System Daily Report',
++                'SSL monitoring system is running normally',
++                [
++                    'Total Certificates' => $stats['total_certificates'],
++                    'Expiring Soon' => $stats['expiring_certificates'],
++                    'Failed Certificates' => $stats['failed_certificates'],
++                    'Renewals Scheduled' => $stats['renewals_scheduled']
++                ],
++                'success'
++            );
++        }
++    }
++
++    /**
++     * Slack通知送信
++     */
++    private function sendSlackAlert(string $title, string $message, array $details = [], string $severity = 'warning'): void
++    {
++        try {
++            if (!config('services.slack.notifications.webhook_url')) {
++                Log::warning('Slack webhook URL not configured, skipping alert', [
++                    'title' => $title,
++                    'severity' => $severity
++                ]);
++                return;
++            }
++
++            Notification::route('slack', config('services.slack.notifications.webhook_url'))
++                ->notify(new SSLSystemAlertNotification($title, $message, $details, $severity));
++                
++            Log::info('Slack alert sent successfully', [
++                'title' => $title,
++                'severity' => $severity,
++                'details_count' => count($details)
++            ]);
++        } catch (\Exception $e) {
++            Log::error('Failed to send Slack alert', [
++                'error' => $e->getMessage(),
++                'title' => $title,
++                'severity' => $severity
++            ]);
++        }
+     }
+ 
+     /**
+@@ -369,4 +501,27 @@ private function calculateHealthStatus(array $stats): string
+ 
+         return 'healthy';
+     }
++
++    /**
++     * 1日1回の定期報告が必要かチェック
++     */
++    private function shouldSendDailyReport(array $stats): bool
++    {
++        // 毎日6時にのみ送信（設定可能）
++        $reportHour = config('ssl-enhanced.monitoring.daily_report_hour', 6);
++        if (now()->hour !== $reportHour) {
++            return false;
++        }
++
++        // 今日既に送信済みかチェック
++        $lastReportDate = Cache::get('ssl_daily_report_last_sent');
++        if ($lastReportDate && $lastReportDate === now()->toDateString()) {
++            return false;
++        }
++
++        // 報告送信をマーク
++        Cache::put('ssl_daily_report_last_sent', now()->toDateString(), now()->addDays(2));
++        
++        return true;
++    }
+ }
+\ No newline at end of file

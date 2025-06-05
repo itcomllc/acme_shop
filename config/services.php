@@ -28,10 +28,21 @@ return [
         'key' => env('RESEND_KEY'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Slack Notification Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for Slack notifications and alerts
+    |
+    */
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
+            'ssl_alerts_channel' => env('SLACK_SSL_ALERTS_CHANNEL', '#ssl-alerts'),
+            'webhook_url' => env('SLACK_WEBHOOK_URL'),
         ],
     ],
 
@@ -88,20 +99,20 @@ return [
         'key_file_path' => env('GOOGLE_APPLICATION_CREDENTIALS'),
         'key_data' => env('GOOGLE_SERVICE_ACCOUNT_KEY_JSON'),
         'credentials' => env('GOOGLE_APPLICATION_CREDENTIALS'), // Referenced in CertificateProviderFactory
-        
+
         'certificate_manager' => [
             'location' => env('GOOGLE_CERT_MANAGER_LOCATION', 'global'),
             'enabled' => env('GOOGLE_CERT_MANAGER_ENABLED', false),
             'auto_renewal' => env('GOOGLE_CERT_MANAGER_AUTO_RENEWAL', true),
             'default_lifetime' => env('GOOGLE_CERT_MANAGER_DEFAULT_LIFETIME', '90 days'),
         ],
-        
+
         'cloud_dns' => [
             'enabled' => env('GOOGLE_CLOUD_DNS_ENABLED', false),
             'zone_name' => env('GOOGLE_CLOUD_DNS_ZONE_NAME'),
             'auto_create_records' => env('GOOGLE_CLOUD_DNS_AUTO_CREATE_RECORDS', false),
         ],
-        
+
         'load_balancer' => [
             'auto_attach_certificates' => env('GOOGLE_LB_AUTO_ATTACH_CERTS', false),
             'ssl_policy' => env('GOOGLE_LB_SSL_POLICY'),
