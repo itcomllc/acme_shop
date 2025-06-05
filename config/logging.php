@@ -12,9 +12,9 @@ return [
     | Default Log Channel
     |--------------------------------------------------------------------------
     |
-    | This option defines the default log channel that is utilized to write
-    | messages to your logs. The value provided here should match one of
-    | the channels present in the list of "channels" configured below.
+    | This option defines the default log channel that gets used when writing
+    | messages to the logs. The name specified in this option should match
+    | one of the channels defined in the "channels" configuration array.
     |
     */
 
@@ -41,20 +41,20 @@ return [
     | Log Channels
     |--------------------------------------------------------------------------
     |
-    | Here you may configure the log channels for your application. Laravel
-    | utilizes the Monolog PHP logging library, which includes a variety
-    | of powerful log handlers and formatters that you're free to use.
+    | Here you may configure the log channels for your application. Out of
+    | the box, Laravel uses the Monolog PHP logging library. This gives
+    | you a variety of powerful log handlers / formatters to utilize.
     |
-    | Available drivers: "single", "daily", "slack", "syslog",
-    |                    "errorlog", "monolog", "custom", "stack"
+    | Available Drivers: "single", "daily", "slack", "syslog",
+    |                    "errorlog", "monolog",
+    |                    "custom", "stack"
     |
     */
 
     'channels' => [
-
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', env('LOG_STACK', 'single')),
+            'channels' => ['single', 'database'],
             'ignore_exceptions' => false,
         ],
 
@@ -127,8 +127,21 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
-        // SSL関連のログチャンネル
+        // Database logging channel
+        'database' => [
+            'driver' => 'custom',
+            'via' => \App\Logging\DatabaseLoggerFactory::class,
+            'level' => env('LOG_LEVEL', 'debug'),
+        ],
+
+        // SSL-specific logging channels
         'ssl' => [
+            'driver' => 'stack',
+            'channels' => ['ssl_file', 'database'],
+            'ignore_exceptions' => false,
+        ],
+
+        'ssl_file' => [
             'driver' => 'daily',
             'path' => storage_path('logs/ssl.log'),
             'level' => env('LOG_LEVEL', 'debug'),
@@ -136,23 +149,146 @@ return [
             'replace_placeholders' => true,
         ],
 
-        'ssl-monitoring' => [
+        'ssl_certificates' => [
+            'driver' => 'stack',
+            'channels' => ['ssl_certificates_file', 'database'],
+            'ignore_exceptions' => false,
+        ],
+
+        'ssl_certificates_file' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/ssl-monitoring.log'),
+            'path' => storage_path('logs/ssl_certificates.log'),
             'level' => env('LOG_LEVEL', 'info'),
-            'days' => 30,
+            'days' => 90,
             'replace_placeholders' => true,
         ],
 
-        'ssl-providers' => [
+        'ssl_providers' => [
+            'driver' => 'stack',
+            'channels' => ['ssl_providers_file', 'database'],
+            'ignore_exceptions' => false,
+        ],
+
+        'ssl_providers_file' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/ssl-providers.log'),
+            'path' => storage_path('logs/ssl_providers.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => 30,
             'replace_placeholders' => true,
         ],
 
+        // Payment and billing logging
+        'payment' => [
+            'driver' => 'stack',
+            'channels' => ['payment_file', 'database'],
+            'ignore_exceptions' => false,
+        ],
+
+        'payment_file' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/payment.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => 365, // Keep payment logs longer for audit
+            'replace_placeholders' => true,
+        ],
+
+        // Authentication and security logging
+        'auth' => [
+            'driver' => 'stack',
+            'channels' => ['auth_file', 'database'],
+            'ignore_exceptions' => false,
+        ],
+
+        'auth_file' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/auth.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => 90,
+            'replace_placeholders' => true,
+        ],
+
+        'security' => [
+            'driver' => 'stack',
+            'channels' => ['security_file', 'database'],
+            'ignore_exceptions' => false,
+        ],
+
+        'security_file' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/security.log'),
+            'level' => env('LOG_LEVEL', 'warning'),
+            'days' => 365, // Keep security logs longer for audit
+            'replace_placeholders' => true,
+        ],
+
+        // API logging
+        'api' => [
+            'driver' => 'stack',
+            'channels' => ['api_file', 'database'],
+            'ignore_exceptions' => false,
+        ],
+
+        'api_file' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/api.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
+        // Admin activity logging
+        'admin' => [
+            'driver' => 'stack',
+            'channels' => ['admin_file', 'database'],
+            'ignore_exceptions' => false,
+        ],
+
+        'admin_file' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/admin.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => 365, // Keep admin logs longer for audit
+            'replace_placeholders' => true,
+        ],
+
+        // System health and monitoring
+        'monitoring' => [
+            'driver' => 'stack',
+            'channels' => ['monitoring_file', 'database'],
+            'ignore_exceptions' => false,
+        ],
+
+        'monitoring_file' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/monitoring.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
+        // Job and queue logging
+        'jobs' => [
+            'driver' => 'stack',
+            'channels' => ['jobs_file', 'database'],
+            'ignore_exceptions' => false,
+        ],
+
+        'jobs_file' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/jobs.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => 14,
+            'replace_placeholders' => true,
+        ],
+
+        // ACME protocol logging
         'acme' => [
+            'driver' => 'stack',
+            'channels' => ['acme_file', 'database'],
+            'ignore_exceptions' => false,
+        ],
+
+        'acme_file' => [
             'driver' => 'daily',
             'path' => storage_path('logs/acme.log'),
             'level' => env('LOG_LEVEL', 'debug'),
@@ -160,27 +296,19 @@ return [
             'replace_placeholders' => true,
         ],
 
-        'billing' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/billing.log'),
-            'level' => env('LOG_LEVEL', 'info'),
-            'days' => 90,
-            'replace_placeholders' => true,
+        // Webhook logging
+        'webhooks' => [
+            'driver' => 'stack',
+            'channels' => ['webhooks_file', 'database'],
+            'ignore_exceptions' => false,
         ],
 
-        'security' => [
+        'webhooks_file' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/security.log'),
-            'level' => env('LOG_LEVEL', 'warning'),
-            'days' => 90,
-            'replace_placeholders' => true,
-        ],
-
-        // データベースログチャンネル（カスタムハンドラー使用）
-        'database' => [
-            'driver' => 'custom',
-            'via' => App\Logging\DatabaseLoggerFactory::class,
+            'path' => storage_path('logs/webhooks.log'),
             'level' => env('LOG_LEVEL', 'info'),
+            'days' => 30,
+            'replace_placeholders' => true,
         ],
     ],
 

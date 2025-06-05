@@ -4,8 +4,7 @@ namespace App\Logging;
 
 use Monolog\Handler\AbstractProcessingHandler;
 use Monolog\LogRecord;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\{DB, Auth};
 
 class DatabaseLogHandler extends AbstractProcessingHandler
 {
@@ -23,6 +22,7 @@ class DatabaseLogHandler extends AbstractProcessingHandler
 
             DB::table('system_logs')->insert([
                 'level' => strtolower($record->level->name),
+                'channel' => $record->channel ?? 'default',
                 'message' => $record->message,
                 'context' => json_encode($record->context),
                 'extra' => json_encode($record->extra),

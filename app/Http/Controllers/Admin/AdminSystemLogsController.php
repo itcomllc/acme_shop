@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\AdminControllerBase;
 use Illuminate\Http\{Request, JsonResponse};
 use Illuminate\Support\Facades\{DB, Log, File, Cache, Auth};
 use Illuminate\Routing\Controllers\{HasMiddleware, Middleware};
+use Carbon\Carbon;
 
 /**
  * Admin System Logs Controller
@@ -50,6 +51,7 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
         try {
             $source = $request->get('source', 'database');
             $level = $request->get('level');
+            $channel = $request->get('channel');
             $search = $request->get('search');
             $dateFrom = $request->get('date_from');
             $dateTo = $request->get('date_to');
@@ -58,7 +60,7 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
 
             switch ($source) {
                 case 'database':
-                    $logsData = $this->getDatabaseLogs($level, $search, $dateFrom, $dateTo, $page, $perPage);
+                    $logsData = $this->getDatabaseLogs($level, $channel, $search, $dateFrom, $dateTo, $page, $perPage);
                     break;
                 case 'file':
                     $logFile = $request->get('file', 'laravel.log');
@@ -92,6 +94,7 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
      */
     private function getDatabaseLogs(
         ?string $level, 
+        ?string $channel,
         ?string $search, 
         ?string $dateFrom, 
         ?string $dateTo, 
@@ -103,6 +106,10 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
         // Apply filters
         if ($level) {
             $query->where('level', $level);
+        }
+
+        if ($channel) {
+            $query->where('channel', $channel);
         }
 
         if ($search) {
@@ -137,8 +144,11 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
                 'message' => $log->message,
                 'context' => $log->context ? json_decode($log->context, true) : null,
                 'extra' => $log->extra ? json_decode($log->extra, true) : null,
+                'user_id' => $log->user_id,
+                'ip_address' => $log->ip_address,
+                'user_agent' => $log->user_agent,
                 'created_at' => $log->created_at,
-                'formatted_time' => \Carbon\Carbon::parse($log->created_at)->format('Y-m-d H:i:s'),
+                'formatted_time' => Carbon::parse($log->created_at)->format('Y-m-d H:i:s'),
                 'level_class' => $this->getLevelClass($log->level)
             ];
         });
@@ -300,7 +310,7 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
                 'message' => $matches[4],
                 'context' => $context,
                 'raw_line' => $line,
-                'formatted_time' => \Carbon\Carbon::parse($timestamp)->format('Y-m-d H:i:s')
+                'formatted_time' => Carbon::parse($timestamp)->format('Y-m-d H:i:s')
             ];
         }
 
@@ -312,7 +322,7 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
             'message' => $line,
             'context' => null,
             'raw_line' => $line,
-            'formatted_time' => \Carbon\Carbon::parse($timestamp)->format('Y-m-d H:i:s')
+            'formatted_time' => Carbon::parse($timestamp)->format('Y-m-d H:i:s')
         ];
     }
 
@@ -333,7 +343,7 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
                     $files[] = [
                         'name' => $fileName,
                         'size' => $this->formatBytes($file->getSize()),
-                        'modified' => \Carbon\Carbon::createFromTimestamp($file->getMTime())->format('Y-m-d H:i:s'),
+                        'modified' => Carbon::createFromTimestamp($file->getMTime())->format('Y-m-d H:i:s'),
                         'path' => $file->getPathname()
                     ];
                 }
@@ -435,11 +445,10 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
                 }
             }
 
-            Log::info('System logs cleared', [
+            $this->logAdminAction('clear_logs', [
                 'source' => $source,
                 'days' => $days,
                 'deleted_count' => $deletedCount,
-                'admin_id' => Auth::id()
             ]);
 
             return response()->json([
@@ -496,7 +505,7 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
     /**
      * Get database log statistics
      */
-    private function getDatabaseLogStats(\Carbon\Carbon $since): array
+    private function getDatabaseLogStats(Carbon $since): array
     {
         if (!DB::getSchemaBuilder()->hasTable('system_logs')) {
             return [
@@ -556,7 +565,7 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
     /**
      * Get log level distribution
      */
-    private function getLogLevelDistribution(\Carbon\Carbon $since): array
+    private function getLogLevelDistribution(Carbon $since): array
     {
         if (!DB::getSchemaBuilder()->hasTable('system_logs')) {
             return [];
@@ -574,7 +583,7 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
     /**
      * Get channel distribution
      */
-    private function getChannelDistribution(\Carbon\Carbon $since): array
+    private function getChannelDistribution(Carbon $since): array
     {
         if (!DB::getSchemaBuilder()->hasTable('system_logs')) {
             return [];
@@ -583,6 +592,7 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
         return DB::table('system_logs')
             ->select('channel', DB::raw('count(*) as count'))
             ->where('created_at', '>=', $since)
+            ->whereNotNull('channel')
             ->groupBy('channel')
             ->orderBy('count', 'desc')
             ->limit(10)
@@ -593,14 +603,14 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
     /**
      * Get recent errors
      */
-    private function getRecentErrors(\Carbon\Carbon $since): array
+    private function getRecentErrors(Carbon $since): array
     {
         if (!DB::getSchemaBuilder()->hasTable('system_logs')) {
             return [];
         }
 
         return DB::table('system_logs')
-            ->whereIn('level', ['ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY'])
+            ->whereIn('level', ['error', 'critical', 'alert', 'emergency'])
             ->where('created_at', '>=', $since)
             ->orderBy('created_at', 'desc')
             ->limit(10)
@@ -610,7 +620,7 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
                     'level' => $log->level,
                     'message' => substr($log->message, 0, 100) . (strlen($log->message) > 100 ? '...' : ''),
                     'channel' => $log->channel,
-                    'time' => \Carbon\Carbon::parse($log->created_at)->diffForHumans(),
+                    'time' => Carbon::parse($log->created_at)->diffForHumans(),
                     'level_class' => $this->getLevelClass($log->level)
                 ];
             })
@@ -622,13 +632,13 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
      */
     private function getLevelClass(string $level): string
     {
-        return match (strtoupper($level)) {
-            'EMERGENCY', 'ALERT', 'CRITICAL' => 'bg-red-100 text-red-800',
-            'ERROR' => 'bg-red-50 text-red-700',
-            'WARNING' => 'bg-yellow-100 text-yellow-800',
-            'NOTICE' => 'bg-blue-100 text-blue-800',
-            'INFO' => 'bg-green-100 text-green-800',
-            'DEBUG' => 'bg-gray-100 text-gray-800',
+        return match (strtolower($level)) {
+            'emergency', 'alert', 'critical' => 'bg-red-100 text-red-800',
+            'error' => 'bg-red-50 text-red-700',
+            'warning' => 'bg-yellow-100 text-yellow-800',
+            'notice' => 'bg-blue-100 text-blue-800',
+            'info' => 'bg-green-100 text-green-800',
+            'debug' => 'bg-gray-100 text-gray-800',
             default => 'bg-gray-100 text-gray-600'
         };
     }
@@ -647,7 +657,7 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
     /**
      * Get timeframe since date
      */
-    private function getTimeframeSince(string $timeframe): \Carbon\Carbon
+    private function getTimeframeSince(string $timeframe): Carbon
     {
         return match ($timeframe) {
             '1h' => now()->subHour(),
@@ -676,13 +686,15 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
                     ->header('Content-Disposition', "attachment; filename=\"{$filename}\"");
                     
             case 'csv':
-                $csvData = "Level,Channel,Message,Created At\n";
+                $csvData = "Level,Channel,Message,User ID,IP Address,Created At\n";
                 foreach ($logs as $log) {
                     $csvData .= sprintf(
-                        "\"%s\",\"%s\",\"%s\",\"%s\"\n",
+                        "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
                         $log->level,
-                        $log->channel,
+                        $log->channel ?? '',
                         str_replace('"', '""', $log->message),
+                        $log->user_id ?? '',
+                        $log->ip_address ?? '',
                         $log->created_at
                     );
                 }
@@ -697,7 +709,7 @@ class AdminSystemLogsController extends AdminControllerBase implements HasMiddle
                     $txtData .= sprintf(
                         "[%s] %s.%s: %s\n",
                         $log->created_at,
-                        $log->channel,
+                        $log->channel ?? 'default',
                         $log->level,
                         $log->message
                     );
