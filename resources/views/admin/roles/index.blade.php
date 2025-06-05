@@ -88,9 +88,14 @@
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
                     </select>
+                    <select id="filter-type" class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Types</option>
+                        <option value="system">System Roles</option>
+                        <option value="custom">Custom Roles</option>
+                    </select>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <button onclick="bulkActionModal()" 
+                    <button onclick="showBulkActionModal()" 
                             class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg flex items-center">
                         <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
@@ -324,19 +329,94 @@
         </div>
     </div>
 
+    <!-- View Role Modal -->
+    <div id="viewRoleModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+        <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-2/3 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Role Details</h3>
+                    <button onclick="closeViewRoleModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                </div>
+                
+                <div id="role-details-content">
+                    <!-- Role details will be loaded here -->
+                </div>
+                
+                <div class="flex justify-end mt-6">
+                    <button onclick="closeViewRoleModal()"
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Actions Modal -->
+    <div id="bulkActionsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Bulk Actions</h3>
+                    <button onclick="closeBulkActionsModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                </div>
+                
+                <form id="bulkActionsForm" class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Action</label>
+                        <select name="action" id="bulk-action" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                required>
+                            <option value="">Select an action</option>
+                            <option value="activate">Activate Roles</option>
+                            <option value="deactivate">Deactivate Roles</option>
+                            <option value="sync_permissions">Sync Permissions</option>
+                        </select>
+                    </div>
+                    
+                    <div id="sync-permissions-selection" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Template Role</label>
+                        <select name="template_role_id" id="bulk-template-role"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">Select template role</option>
+                            <!-- Roles will be loaded here -->
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Selected roles will copy permissions from this template</p>
+                    </div>
+                    
+                    <div>
+                        <p class="text-sm text-gray-600">
+                            <span id="selected-roles-count">0</span> roles selected
+                        </p>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="closeBulkActionsModal()"
+                                class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">
+                            Apply Actions
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Global variables
         let currentPage = 1;
         let allRoles = [];
         let allPermissions = [];
+        let filteredRoles = [];
 
         // Initialize the page
         document.addEventListener('DOMContentLoaded', function() {
             loadRoles();
             loadPermissions();
             loadStatistics();
-            
-            // Setup event listeners
             setupEventListeners();
         });
 
@@ -344,16 +424,29 @@
             // Search functionality
             document.getElementById('search-roles').addEventListener('input', debounce(filterRoles, 300));
             document.getElementById('filter-status').addEventListener('change', filterRoles);
+            document.getElementById('filter-type').addEventListener('change', filterRoles);
             
             // Select all functionality
             document.getElementById('select-all-roles').addEventListener('change', function() {
                 const checkboxes = document.querySelectorAll('.role-checkbox');
                 checkboxes.forEach(cb => cb.checked = this.checked);
+                updateSelectedCount();
             });
             
             // Form submissions
             document.getElementById('createRoleForm').addEventListener('submit', handleCreateRole);
             document.getElementById('editRoleForm').addEventListener('submit', handleEditRole);
+            document.getElementById('bulkActionsForm').addEventListener('submit', handleBulkActions);
+
+            // Bulk action role selection
+            document.getElementById('bulk-action').addEventListener('change', function() {
+                const syncSelection = document.getElementById('sync-permissions-selection');
+                if (this.value === 'sync_permissions') {
+                    syncSelection.classList.remove('hidden');
+                } else {
+                    syncSelection.classList.add('hidden');
+                }
+            });
         }
 
         // Load roles data
@@ -370,14 +463,25 @@
                 if (!response.ok) throw new Error('Failed to load roles');
                 
                 const data = await response.json();
-                allRoles = data.data.roles.data;
-                renderRoles(allRoles);
-                renderPagination(data.data.roles);
+                
+                if (data.success) {
+                    allRoles = data.data.roles?.data || data.data || [];
+                    filteredRoles = [...allRoles];
+                    renderRoles(filteredRoles);
+                    
+                    if (data.data.roles?.pagination) {
+                        renderPagination(data.data.roles.pagination);
+                    }
+                } else {
+                    throw new Error(data.message || 'Failed to load roles');
+                }
+                
                 hideLoading();
             } catch (error) {
                 console.error('Error loading roles:', error);
-                showError('Failed to load roles');
+                showError('Failed to load roles: ' + error.message);
                 hideLoading();
+                showEmptyState();
             }
         }
 
@@ -394,8 +498,9 @@
                 if (!response.ok) throw new Error('Failed to load permissions');
                 
                 const data = await response.json();
-                allPermissions = data.data.permissions;
+                allPermissions = data.data.permissions || {};
                 renderPermissions();
+                populateTemplateRoles();
             } catch (error) {
                 console.error('Error loading permissions:', error);
             }
@@ -416,12 +521,17 @@
                 const data = await response.json();
                 const stats = data.data;
                 
-                document.getElementById('total-roles-count').textContent = stats.total_roles;
-                document.getElementById('active-roles-count').textContent = stats.active_roles;
+                document.getElementById('total-roles-count').textContent = stats.total_roles || 0;
+                document.getElementById('active-roles-count').textContent = stats.active_roles || 0;
                 document.getElementById('total-users-count').textContent = stats.total_users || 0;
                 document.getElementById('total-permissions-count').textContent = stats.total_permissions || 0;
             } catch (error) {
                 console.error('Error loading statistics:', error);
+                // Set default values
+                document.getElementById('total-roles-count').textContent = '0';
+                document.getElementById('active-roles-count').textContent = '0';
+                document.getElementById('total-users-count').textContent = '0';
+                document.getElementById('total-permissions-count').textContent = '0';
             }
         }
 
@@ -429,7 +539,7 @@
         function renderRoles(roles) {
             const tbody = document.getElementById('roles-tbody');
             
-            if (roles.length === 0) {
+            if (!Array.isArray(roles) || roles.length === 0) {
                 showEmptyState();
                 return;
             }
@@ -437,7 +547,7 @@
             tbody.innerHTML = roles.map(role => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
-                        <input type="checkbox" class="role-checkbox rounded" value="${role.id}">
+                        <input type="checkbox" class="role-checkbox rounded" value="${role.id}" onchange="updateSelectedCount()">
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <div class="flex items-center">
@@ -480,11 +590,15 @@
                     </td>
                 </tr>
             `).join('');
+
+            document.getElementById('roles-table').classList.remove('hidden');
+            document.getElementById('roles-empty').classList.add('hidden');
         }
 
         // Render permissions checkboxes
         function renderPermissions(containerId = 'permissions-container', selectedPermissions = []) {
             const container = document.getElementById(containerId);
+            if (!container) return;
             
             // Group permissions by category
             const groupedPermissions = {};
@@ -518,28 +632,220 @@
             `).join('');
         }
 
-        // Modal functions
-        function showCreateRoleModal() {
-            document.getElementById('createRoleModal').classList.remove('hidden');
-            renderPermissions('permissions-container');
+        // Populate template roles for bulk actions
+        function populateTemplateRoles() {
+            const select = document.getElementById('bulk-template-role');
+            if (!select) return;
+
+            select.innerHTML = '<option value="">Select template role</option>';
+            allRoles.forEach(role => {
+                const option = document.createElement('option');
+                option.value = role.id;
+                option.textContent = role.display_name;
+                select.appendChild(option);
+            });
         }
 
-        function closeCreateRoleModal() {
-            document.getElementById('createRoleModal').classList.add('hidden');
-            document.getElementById('createRoleForm').reset();
+        // Filter roles
+        function filterRoles() {
+            const search = document.getElementById('search-roles').value.toLowerCase();
+            const status = document.getElementById('filter-status').value;
+            const type = document.getElementById('filter-type').value;
+            
+            filteredRoles = allRoles.filter(role => {
+                const matchesSearch = role.display_name.toLowerCase().includes(search) || 
+                                    role.name.toLowerCase().includes(search);
+                const matchesStatus = !status || 
+                                    (status === 'active' && role.is_active) ||
+                                    (status === 'inactive' && !role.is_active);
+                const matchesType = !type ||
+                                   (type === 'system' && role.metadata?.system) ||
+                                   (type === 'custom' && !role.metadata?.system);
+                
+                return matchesSearch && matchesStatus && matchesType;
+            });
+            
+            renderRoles(filteredRoles);
         }
 
-        function closeEditRoleModal() {
-            document.getElementById('editRoleModal').classList.add('hidden');
-            document.getElementById('editRoleForm').reset();
+        // View role details
+        async function viewRole(roleId) {
+            try {
+                const response = await fetch(`/admin/roles/${roleId}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load role details');
+
+                const data = await response.json();
+
+                if (data.success) {
+                    renderRoleDetails(data.data.role);
+                    document.getElementById('viewRoleModal').classList.remove('hidden');
+                } else {
+                    showError(data.message || 'Failed to load role details');
+                }
+            } catch (error) {
+                console.error('Error loading role details:', error);
+                showError('Failed to load role details: ' + error.message);
+            }
         }
 
-        // Role operations
+        // Render role details
+        function renderRoleDetails(role) {
+            const content = document.getElementById('role-details-content');
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <!-- Basic Info -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-3">Basic Information</h4>
+                            <dl class="space-y-2">
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Name</dt>
+                                    <dd class="text-sm text-gray-900">${role.name}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Display Name</dt>
+                                    <dd class="text-sm text-gray-900">${role.display_name}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Description</dt>
+                                    <dd class="text-sm text-gray-900">${role.description || 'No description'}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Priority</dt>
+                                    <dd class="text-sm text-gray-900">${role.priority}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Status</dt>
+                                    <dd class="text-sm">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                            role.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                        }">
+                                            ${role.is_active ? 'Active' : 'Inactive'}
+                                        </span>
+                                        ${role.metadata?.system ? '<span class="ml-2 text-xs text-blue-600">System Role</span>' : ''}
+                                    </dd>
+                                </div>
+                            </dl>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-3">Statistics</h4>
+                            <dl class="space-y-2">
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Users with this role</dt>
+                                    <dd class="text-sm text-gray-900">${(role.users || []).length}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Permissions count</dt>
+                                    <dd class="text-sm text-gray-900">${(role.permissions || []).length}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Created</dt>
+                                    <dd class="text-sm text-gray-900">${new Date(role.created_at).toLocaleString()}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Color</dt>
+                                    <dd class="text-sm text-gray-900">
+                                        <div class="flex items-center">
+                                            <div class="w-4 h-4 rounded mr-2" style="background-color: ${role.color || '#3b82f6'}"></div>
+                                            ${role.color || '#3b82f6'}
+                                        </div>
+                                    </dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </div>
+
+                    <!-- Users -->
+                    ${role.users && role.users.length > 0 ? `
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-3">Users with this role</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                ${role.users.map(user => `
+                                    <div class="flex items-center p-2 bg-gray-50 rounded">
+                                        <img class="h-8 w-8 rounded-full mr-2" 
+                                             src="https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&size=32" 
+                                             alt="${user.name}">
+                                        <div>
+                                            <div class="text-sm font-medium text-gray-900">${user.name}</div>
+                                            <div class="text-xs text-gray-500">${user.email}</div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <!-- Permissions -->
+                    ${role.permissions && role.permissions.length > 0 ? `
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-3">Permissions (${role.permissions.length})</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                ${role.permissions.map(permission => `
+                                    <div class="p-2 bg-gray-50 rounded">
+                                        <div class="text-sm font-medium text-gray-900">${permission.display_name}</div>
+                                        <div class="text-xs text-gray-500">${permission.category || 'general'}</div>
+                                        ${permission.description ? `<div class="text-xs text-gray-400 mt-1">${permission.description}</div>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // Edit role
+        async function editRole(roleId) {
+            try {
+                const response = await fetch(`/admin/roles/${roleId}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load role');
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const role = data.data.role;
+                    
+                    // Populate form
+                    document.getElementById('edit-role-id').value = role.id;
+                    document.getElementById('edit-role-display-name').value = role.display_name;
+                    document.getElementById('edit-role-description').value = role.description || '';
+                    document.getElementById('edit-role-color').value = role.color || '#3b82f6';
+                    document.getElementById('edit-role-priority').value = role.priority;
+                    document.getElementById('edit-role-status').value = role.is_active ? '1' : '0';
+                    
+                    // Render permissions with selected ones
+                    const selectedPermissions = (role.permissions || []).map(p => p.id);
+                    renderPermissions('edit-permissions-container', selectedPermissions);
+                    
+                    document.getElementById('editRoleModal').classList.remove('hidden');
+                } else {
+                    showError(data.message || 'Failed to load role');
+                }
+            } catch (error) {
+                console.error('Error loading role:', error);
+                showError('Failed to load role details: ' + error.message);
+            }
+        }
+
+        // Handle create role form submission
         async function handleCreateRole(event) {
             event.preventDefault();
             
             const formData = new FormData(event.target);
-            const permissions = Array.from(document.querySelectorAll('input[name="permissions[]"]:checked'))
+            const permissions = Array.from(document.querySelectorAll('#permissions-container input[name="permissions[]"]:checked'))
                                     .map(cb => parseInt(cb.value));
             
             const roleData = {
@@ -570,47 +876,20 @@
                     loadRoles();
                     loadStatistics();
                 } else {
-                    showError(result.message || 'Failed to create role');
+                    if (result.errors) {
+                        const errorMessages = Object.values(result.errors).flat().join(', ');
+                        showError(errorMessages);
+                    } else {
+                        showError(result.message || 'Failed to create role');
+                    }
                 }
             } catch (error) {
                 console.error('Error creating role:', error);
-                showError('Failed to create role');
+                showError('Failed to create role: ' + error.message);
             }
         }
 
-        async function editRole(roleId) {
-            try {
-                const response = await fetch(`/admin/roles/${roleId}`, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                    }
-                });
-                
-                if (!response.ok) throw new Error('Failed to load role');
-                
-                const data = await response.json();
-                const role = data.data.role;
-                
-                // Populate form
-                document.getElementById('edit-role-id').value = role.id;
-                document.getElementById('edit-role-display-name').value = role.display_name;
-                document.getElementById('edit-role-description').value = role.description || '';
-                document.getElementById('edit-role-color').value = role.color || '#3b82f6';
-                document.getElementById('edit-role-priority').value = role.priority;
-                document.getElementById('edit-role-status').value = role.is_active ? '1' : '0';
-                
-                // Render permissions with selected ones
-                const selectedPermissions = role.permissions ? role.permissions.map(p => p.id) : [];
-                renderPermissions('edit-permissions-container', selectedPermissions);
-                
-                document.getElementById('editRoleModal').classList.remove('hidden');
-            } catch (error) {
-                console.error('Error loading role:', error);
-                showError('Failed to load role details');
-            }
-        }
-
+        // Handle edit role form submission
         async function handleEditRole(event) {
             event.preventDefault();
             
@@ -647,14 +926,20 @@
                     loadRoles();
                     loadStatistics();
                 } else {
-                    showError(result.message || 'Failed to update role');
+                    if (result.errors) {
+                        const errorMessages = Object.values(result.errors).flat().join(', ');
+                        showError(errorMessages);
+                    } else {
+                        showError(result.message || 'Failed to update role');
+                    }
                 }
             } catch (error) {
                 console.error('Error updating role:', error);
-                showError('Failed to update role');
+                showError('Failed to update role: ' + error.message);
             }
         }
 
+        // Delete role
         async function deleteRole(roleId) {
             if (!confirm('Are you sure you want to delete this role? This action cannot be undone.')) {
                 return;
@@ -680,28 +965,147 @@
                 }
             } catch (error) {
                 console.error('Error deleting role:', error);
-                showError('Failed to delete role');
+                showError('Failed to delete role: ' + error.message);
             }
         }
 
-        // Utility functions
-        function filterRoles() {
-            const search = document.getElementById('search-roles').value.toLowerCase();
-            const status = document.getElementById('filter-status').value;
-            
-            let filtered = allRoles.filter(role => {
-                const matchesSearch = role.display_name.toLowerCase().includes(search) || 
-                                    role.name.toLowerCase().includes(search);
-                const matchesStatus = !status || 
-                                    (status === 'active' && role.is_active) ||
-                                    (status === 'inactive' && !role.is_active);
-                
-                return matchesSearch && matchesStatus;
-            });
-            
-            renderRoles(filtered);
+        // Bulk actions
+        function showBulkActionModal() {
+            const checkedBoxes = document.querySelectorAll('.role-checkbox:checked');
+            if (checkedBoxes.length === 0) {
+                showError('Please select at least one role');
+                return;
+            }
+
+            updateSelectedCount();
+            document.getElementById('bulkActionsModal').classList.remove('hidden');
         }
 
+        // Handle bulk actions form submission
+        async function handleBulkActions(event) {
+            event.preventDefault();
+
+            const formData = new FormData(event.target);
+            const checkedBoxes = document.querySelectorAll('.role-checkbox:checked');
+            const roleIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value));
+
+            const bulkData = {
+                role_ids: roleIds,
+                action: formData.get('action')
+            };
+
+            if (formData.get('action') === 'sync_permissions') {
+                bulkData.template_role_id = formData.get('template_role_id');
+                if (!bulkData.template_role_id) {
+                    showError('Please select a template role');
+                    return;
+                }
+            }
+
+            try {
+                const response = await fetch('/admin/roles/bulk-action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify(bulkData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showSuccess(result.message || 'Bulk action completed successfully');
+                    closeBulkActionsModal();
+                    loadRoles();
+                    loadStatistics();
+                } else {
+                    showError(result.message || 'Bulk action failed');
+                }
+            } catch (error) {
+                console.error('Error performing bulk action:', error);
+                showError('Bulk action failed: ' + error.message);
+            }
+        }
+
+        // Update selected count
+        function updateSelectedCount() {
+            const checkedBoxes = document.querySelectorAll('.role-checkbox:checked');
+            const countElement = document.getElementById('selected-roles-count');
+            if (countElement) {
+                countElement.textContent = checkedBoxes.length;
+            }
+        }
+
+        // Render pagination
+        function renderPagination(pagination) {
+            const container = document.getElementById('pagination-container');
+            if (!container || !pagination) return;
+
+            const {
+                current_page,
+                last_page,
+                from,
+                to,
+                total
+            } = pagination;
+
+            if (last_page <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="text-sm text-gray-700">
+                        Showing ${from} to ${to} of ${total} results
+                    </div>
+                    <div class="flex space-x-2">
+                        ${current_page > 1 ? `
+                                <button onclick="loadRoles(${current_page - 1})" 
+                                        class="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                                    Previous
+                                </button>
+                            ` : ''}
+                        ${current_page < last_page ? `
+                                <button onclick="loadRoles(${current_page + 1})" 
+                                        class="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                                    Next
+                                </button>
+                            ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Modal functions
+        function showCreateRoleModal() {
+            document.getElementById('createRoleModal').classList.remove('hidden');
+            renderPermissions('permissions-container');
+        }
+
+        function closeCreateRoleModal() {
+            document.getElementById('createRoleModal').classList.add('hidden');
+            document.getElementById('createRoleForm').reset();
+        }
+
+        function closeEditRoleModal() {
+            document.getElementById('editRoleModal').classList.add('hidden');
+            document.getElementById('editRoleForm').reset();
+        }
+
+        function closeViewRoleModal() {
+            document.getElementById('viewRoleModal').classList.add('hidden');
+        }
+
+        function closeBulkActionsModal() {
+            document.getElementById('bulkActionsModal').classList.add('hidden');
+            document.getElementById('bulkActionsForm').reset();
+            document.getElementById('sync-permissions-selection').classList.add('hidden');
+        }
+
+        // Utility functions
         function refreshRoles() {
             loadRoles();
             loadStatistics();
@@ -710,6 +1114,7 @@
         function showLoading() {
             document.getElementById('roles-loading').classList.remove('hidden');
             document.getElementById('roles-table').classList.add('hidden');
+            document.getElementById('roles-empty').classList.add('hidden');
         }
 
         function hideLoading() {
@@ -720,15 +1125,16 @@
         function showEmptyState() {
             document.getElementById('roles-empty').classList.remove('hidden');
             document.getElementById('roles-table').classList.add('hidden');
+            document.getElementById('roles-loading').classList.add('hidden');
         }
 
         function showSuccess(message) {
-            // You can implement a toast notification system here
+            // Simple alert for now - you can implement toast notifications later
             alert(message);
         }
 
         function showError(message) {
-            // You can implement a toast notification system here
+            // Simple alert for now - you can implement toast notifications later
             alert('Error: ' + message);
         }
 
@@ -742,22 +1148,6 @@
                 clearTimeout(timeout);
                 timeout = setTimeout(later, wait);
             };
-        }
-
-        // Placeholder functions
-        function viewRole(roleId) {
-            // Implement role view functionality
-            console.log('View role:', roleId);
-        }
-
-        function bulkActionModal() {
-            // Implement bulk actions
-            console.log('Bulk actions');
-        }
-
-        function renderPagination(paginationData) {
-            // Implement pagination if needed
-            console.log('Pagination:', paginationData);
         }
     </script>
 </x-layouts.admin>

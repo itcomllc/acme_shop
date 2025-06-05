@@ -90,6 +90,7 @@ Route::middleware(['auth', 'permission:admin.access'])->prefix('admin')->name('a
         Route::post('roles/{role}/assign-user', [AdminRoleController::class, 'assignToUser'])->name('roles.assign-user');
         Route::delete('roles/{role}/users', [AdminRoleController::class, 'removeFromUser'])->name('roles.remove-user');
         Route::post('roles/bulk-assign', [AdminRoleController::class, 'bulkAssign'])->name('roles.bulk-assign');
+        Route::post('roles/bulk-action', [AdminRoleController::class, 'bulkActions'])->name('roles.bulk-action');
         Route::get('roles-statistics', [AdminRoleController::class, 'statistics'])->name('roles.statistics');
     });
     

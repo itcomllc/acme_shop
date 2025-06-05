@@ -680,6 +680,119 @@ class AdminRoleController extends AdminControllerBase implements HasMiddleware
     }
 
     /**
+     * Bulk actions on roles
+     */
+    public function bulkActions(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'role_ids' => ['required', 'array', 'max:100'],
+            'role_ids.*' => ['integer', 'exists:roles,id'],
+            'action' => ['required', 'in:activate,deactivate,delete,assign_permissions,sync_permissions'],
+            'permission_ids' => ['required_if:action,assign_permissions', 'array'],
+            'permission_ids.*' => ['exists:permissions,id']
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $roles = Role::whereIn('id', $request->role_ids)->get();
+            $results = [];
+
+            DB::transaction(function () use ($roles, $request, &$results) {
+                foreach ($roles as $role) {
+                    // Skip system roles for destructive actions
+                    if (($role->metadata['system'] ?? false) && in_array($request->action, ['delete', 'deactivate'])) {
+                        $results[] = [
+                            'role_id' => $role->id,
+                            'role_name' => $role->name,
+                            'status' => 'skipped',
+                            'reason' => 'System role protected'
+                        ];
+                        continue;
+                    }
+
+                    try {
+                        switch ($request->action) {
+                            case 'activate':
+                                $role->update(['is_active' => true]);
+                                break;
+                            case 'deactivate':
+                                $role->update(['is_active' => false]);
+                                break;
+                            case 'delete':
+                                if ($role->users()->count() === 0) {
+                                    $role->permissions()->detach();
+                                    $role->delete();
+                                } else {
+                                    throw new \Exception('Role has assigned users');
+                                }
+                                break;
+                            case 'assign_permissions':
+                                $role->permissions()->sync($request->permission_ids);
+                                break;
+                        }
+
+                        $results[] = [
+                            'role_id' => $role->id,
+                            'role_name' => $role->name,
+                            'status' => 'success'
+                        ];
+                    } catch (\Exception $e) {
+                        $results[] = [
+                            'role_id' => $role->id,
+                            'role_name' => $role->name,
+                            'status' => 'failed',
+                            'error' => $e->getMessage()
+                        ];
+                    }
+                }
+            });
+
+            $successful = collect($results)->where('status', 'success')->count();
+            $failed = collect($results)->where('status', 'failed')->count();
+            $skipped = collect($results)->where('status', 'skipped')->count();
+
+            $this->logAdminAction('roles_bulk_action', [
+                'action' => $request->action,
+                'successful' => $successful,
+                'failed' => $failed,
+                'skipped' => $skipped
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Bulk action completed. Success: {$successful}, Failed: {$failed}, Skipped: {$skipped}",
+                'data' => [
+                    'results' => $results,
+                    'summary' => [
+                        'successful' => $successful,
+                        'failed' => $failed,
+                        'skipped' => $skipped
+                    ]
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Bulk role action failed', [
+                'error' => $e->getMessage(),
+                'admin_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Bulk action failed',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+    /**
      * Get role usage statistics
      */
     private function getRoleUsage(): array
