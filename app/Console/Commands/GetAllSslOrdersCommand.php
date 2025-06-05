@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Services\GoGetSSLService;
+use App\Notifications\SSLSystemAlertNotification;
+use Illuminate\Support\Facades\{Log, Cache, Notification};
 
 class GetAllSslOrdersCommand extends Command
 {
@@ -14,7 +16,8 @@ class GetAllSslOrdersCommand extends Command
                             {--export= : Export to file (csv, json)}
                             {--all : Retrieve and display all orders (ignores limit)}
                             {--no-details : Skip fetching detailed information for faster execution}
-                            {--debug : Output debug information for domain extraction}';
+                            {--debug : Output debug information for domain extraction}
+                            {--notify : Send Slack notifications for issues}';
 
     protected $description = 'Retrieve all SSL orders from GoGetSSL';
 
@@ -29,6 +32,14 @@ class GetAllSslOrdersCommand extends Command
 
     public function handle(): int
     {
+        $this->info('🔍 Starting SSL orders retrieval from GoGetSSL...');
+        
+        // 構造化ログ
+        Log::info('SSL orders retrieval started', [
+            'command' => 'ssl:get-all-orders',
+            'options' => $this->options()
+        ]);
+
         try {
             $limit = (int) $this->option('limit');
             $offset = (int) $this->option('offset');
@@ -37,9 +48,8 @@ class GetAllSslOrdersCommand extends Command
             $retrieveAll = (bool) $this->option('all');
             $skipDetails = (bool) $this->option('no-details');
             $debug = (bool) $this->option('debug');
+            $notify = (bool) $this->option('notify');
 
-            $this->info('Retrieving SSL orders from GoGetSSL...');
-            
             // 最初に商品情報を取得
             $this->loadProductInformation();
             
@@ -47,6 +57,7 @@ class GetAllSslOrdersCommand extends Command
                 $this->info("Parameters: limit={$limit}, offset={$offset}, status={$status}");
             }
 
+            $startTime = microtime(true);
             $allOrders = $this->getOrdersBasedOnOptions(
                 $retrieveAll,
                 $skipDetails,
@@ -55,11 +66,31 @@ class GetAllSslOrdersCommand extends Command
                 $offset,
                 $debug
             );
+            $processingTime = round((microtime(true) - $startTime), 2);
 
             if (empty($allOrders)) {
-                $this->warn('No SSL orders found.');
+                $this->warn('❌ No SSL orders found.');
+                
+                // 注文が見つからない場合の通知
+                if ($notify && $this->shouldNotifyNoOrders()) {
+                    $this->sendSlackAlert(
+                        'No SSL Orders Found',
+                        'SSL orders retrieval returned no results',
+                        [
+                            'Status Filter' => $status ?? 'All',
+                            'Offset' => $offset,
+                            'Limit' => $limit,
+                            'Processing Time' => "{$processingTime}s"
+                        ],
+                        'warning'
+                    );
+                }
+                
                 return self::SUCCESS;
             }
+
+            // 異常検知とアラート
+            $this->detectAnomaliesAndNotify($allOrders, $notify);
 
             $this->displayOrdersSummary($allOrders);
             $this->displayOrdersTable($allOrders);
@@ -68,15 +99,49 @@ class GetAllSslOrdersCommand extends Command
                 $this->exportOrders($allOrders, $exportFormat);
             }
 
-            $this->info('SSL orders retrieved successfully!');
+            // 処理統計をキャッシュ
+            $this->cacheProcessingStats($allOrders, $processingTime);
+
+            // 構造化ログ
+            Log::info('SSL orders retrieval completed successfully', [
+                'orders_count' => count($allOrders),
+                'processing_time' => $processingTime,
+                'status_filter' => $status,
+                'export_format' => $exportFormat,
+                'performance_metrics' => $this->getPerformanceMetrics($allOrders, $processingTime)
+            ]);
+
+            $this->info('✅ SSL orders retrieved successfully!');
             return self::SUCCESS;
 
         } catch (\Exception $e) {
-            $this->error('Failed to retrieve SSL orders: ' . $e->getMessage());
-            // ログに記録（必要に応じてLogファサードを使用）
+            $this->error('❌ Failed to retrieve SSL orders: ' . $e->getMessage());
+            
+            // 重大エラーのSlack通知
+            if ($notify) {
+                $this->sendSlackAlert(
+                    'SSL Orders Retrieval Failed',
+                    'Failed to retrieve SSL orders from GoGetSSL',
+                    [
+                        'Error' => $e->getMessage(),
+                        'File' => $e->getFile() . ':' . $e->getLine(),
+                        'Command' => $this->signature,
+                        'Status Filter' => $status ?? 'All'
+                    ],
+                    'critical'
+                );
+            }
+            
+            Log::error('SSL orders retrieval failed', [
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+                'options' => $this->options()
+            ]);
+            
             if (config('app.debug')) {
                 $this->error('Trace: ' . $e->getTraceAsString());
             }
+            
             return self::FAILURE;
         }
     }
@@ -252,7 +317,6 @@ class GetAllSslOrdersCommand extends Command
         return $this->enrichOrdersWithDetails($filteredOrders, $debug);
     }
 
-
     /**
      * @return array<int, array<string, mixed>>
      */
@@ -324,6 +388,7 @@ class GetAllSslOrdersCommand extends Command
         $progressBar->start();
 
         $enrichedOrders = [];
+        $failedOrders = 0;
         
         foreach ($orders as $order) {
             $orderId = $order['order_id'];
@@ -335,8 +400,6 @@ class GetAllSslOrdersCommand extends Command
                 
                 // APIレスポンス全体をログに出力（特定のオーダーIDの場合）
                 if (in_array($orderId, ['3048044', '3038919', '1682136']) || $debug) {
-                    // ログに記録（必要に応じて）
-                    
                     if ($debug) {
                         $this->info("\nFull Debug - Order {$orderId} API Response:");
                         $this->line(json_encode($orderDetails, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
@@ -392,7 +455,12 @@ class GetAllSslOrdersCommand extends Command
                 usleep(50000);
                 
             } catch (\Exception $e) {
-                // ログに記録（必要に応じて）
+                $failedOrders++;
+                
+                Log::warning('Failed to fetch order details', [
+                    'order_id' => $orderId,
+                    'error' => $e->getMessage()
+                ]);
                 
                 $enrichedOrder = array_merge($order, [
                     'domain' => 'N/A',
@@ -422,6 +490,11 @@ class GetAllSslOrdersCommand extends Command
         $excludedCount = count($orders) - count($enrichedOrders);
         if ($excludedCount > 0) {
             $this->info("Excluded {$excludedCount} SAN-only order(s) from display");
+        }
+
+        // 失敗した注文の警告
+        if ($failedOrders > 0) {
+            $this->warn("Failed to fetch details for {$failedOrders} order(s)");
         }
 
         return $enrichedOrders;
@@ -590,14 +663,7 @@ class GetAllSslOrdersCommand extends Command
 
         $filtered = array_filter($orders, function (array $order) use ($statusFilter): bool {
             $orderStatus = $order['status'] ?? '';
-            $match = $orderStatus === $statusFilter;
-            
-            // デバッグ: 特定のオーダーIDをチェック
-            if ($order['order_id'] == '1682136') {
-                // ログに記録（必要に応じて）
-            }
-            
-            return $match;
+            return $orderStatus === $statusFilter;
         });
         
         return $filtered;
@@ -609,9 +675,16 @@ class GetAllSslOrdersCommand extends Command
     protected function displayOrdersSummary(array $orders): void
     {
         $statusCounts = [];
+        $dataIssueCount = 0;
+        
         foreach ($orders as $order) {
             $status = $order['status'] ?? 'unknown';
             $statusCounts[$status] = ($statusCounts[$status] ?? 0) + 1;
+            
+            // データ問題の検知
+            if (str_contains($order['domain'] ?? '', 'Domain N/A')) {
+                $dataIssueCount++;
+            }
         }
 
         $this->newLine();
@@ -621,6 +694,11 @@ class GetAllSslOrdersCommand extends Command
         foreach ($statusCounts as $status => $count) {
             $this->line("  {$status}: {$count}");
         }
+        
+        if ($dataIssueCount > 0) {
+            $this->warn("  Data Issues: {$dataIssueCount}");
+        }
+        
         $this->newLine();
     }
 
@@ -708,19 +786,35 @@ class GetAllSslOrdersCommand extends Command
             mkdir($directory, 0755, true);
         }
 
-        switch (strtolower($format)) {
-            case 'csv':
-                $this->exportToCsv($orders, $filepath);
-                break;
-            case 'json':
-                $this->exportToJson($orders, $filepath);
-                break;
-            default:
-                $this->error("Unsupported export format: {$format}");
-                return;
-        }
+        try {
+            switch (strtolower($format)) {
+                case 'csv':
+                    $this->exportToCsv($orders, $filepath);
+                    break;
+                case 'json':
+                    $this->exportToJson($orders, $filepath);
+                    break;
+                default:
+                    $this->error("Unsupported export format: {$format}");
+                    return;
+            }
 
-        $this->info("Orders exported to: {$filepath}");
+            $this->info("Orders exported to: {$filepath}");
+            
+            Log::info('SSL orders exported successfully', [
+                'format' => $format,
+                'filepath' => $filepath,
+                'orders_count' => count($orders)
+            ]);
+            
+        } catch (\Exception $e) {
+            $this->error("Failed to export orders: {$e->getMessage()}");
+            
+            Log::error('SSL orders export failed', [
+                'format' => $format,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     /**
@@ -784,6 +878,222 @@ class GetAllSslOrdersCommand extends Command
             'orders' => $orders
         ];
 
-        file_put_contents($filepath, json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        $result = file_put_contents($filepath, json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        
+        if ($result === false) {
+            throw new \RuntimeException("Failed to write JSON file: {$filepath}");
+        }
+    }
+
+    /**
+     * 異常検知とSlack通知
+     */
+    private function detectAnomaliesAndNotify(array $orders, bool $notify): void
+    {
+        if (!$notify && !config('ssl-enhanced.monitoring.alert_on_failure', true)) {
+            return;
+        }
+
+        $stats = $this->analyzeOrders($orders);
+
+        // データ品質の問題
+        if ($stats['data_issues'] > 0) {
+            $this->sendSlackAlert(
+                'SSL Orders Data Quality Issues',
+                'Found orders with data extraction problems',
+                [
+                    'Orders with Issues' => $stats['data_issues'],
+                    'Total Orders' => $stats['total_orders'],
+                    'Issue Rate' => round(($stats['data_issues'] / max($stats['total_orders'], 1)) * 100, 1) . '%',
+                    'Common Issue' => 'Domain extraction problems'
+                ],
+                'warning'
+            );
+        }
+
+        // 失敗ステータスの大量検知
+        if ($stats['failed_orders'] > 10) {
+            $this->sendSlackAlert(
+                'High Number of Failed SSL Orders',
+                "Found {$stats['failed_orders']} failed SSL orders",
+                [
+                    'Failed Orders' => $stats['failed_orders'],
+                    'Total Orders' => $stats['total_orders'],
+                    'Failure Rate' => round(($stats['failed_orders'] / max($stats['total_orders'], 1)) * 100, 1) . '%'
+                ],
+                'error'
+            );
+        }
+
+        // 期限切れ間近の大量検知
+        $expiringSoonThreshold = 20;
+        if ($stats['expiring_soon'] > $expiringSoonThreshold) {
+            $this->sendSlackAlert(
+                'Many SSL Orders Expiring Soon',
+                "Warning: {$stats['expiring_soon']} SSL orders expiring within 30 days",
+                [
+                    'Expiring Soon' => $stats['expiring_soon'],
+                    'Total Orders' => $stats['total_orders'],
+                    'Threshold' => $expiringSoonThreshold
+                ],
+                'warning'
+            );
+        }
+    }
+
+    /**
+     * 注文の分析統計
+     */
+    private function analyzeOrders(array $orders): array
+    {
+        $stats = [
+            'total_orders' => count($orders),
+            'data_issues' => 0,
+            'failed_orders' => 0,
+            'expiring_soon' => 0,
+            'status_distribution' => []
+        ];
+
+        foreach ($orders as $order) {
+            $status = $order['status'] ?? 'unknown';
+            $stats['status_distribution'][$status] = ($stats['status_distribution'][$status] ?? 0) + 1;
+
+            // データ問題の検知
+            if (str_contains($order['domain'] ?? '', 'Domain N/A')) {
+                $stats['data_issues']++;
+            }
+
+            // 失敗した注文
+            if (in_array($status, ['failed', 'cancelled', 'rejected'])) {
+                $stats['failed_orders']++;
+            }
+
+            // 期限切れ間近（30日以内）
+            if (!empty($order['valid_till']) && $order['valid_till'] !== 'N/A') {
+                try {
+                    $expiryDate = new \DateTime($order['valid_till']);
+                    $daysUntilExpiry = (int) $expiryDate->diff(new \DateTime())->days;
+                    if ($daysUntilExpiry <= 30 && $daysUntilExpiry >= 0) {
+                        $stats['expiring_soon']++;
+                    }
+                } catch (\Exception $e) {
+                    // 日付解析エラーは無視
+                }
+            }
+        }
+
+        return $stats;
+    }
+
+    /**
+     * 処理統計をキャッシュ
+     */
+    private function cacheProcessingStats(array $orders, float $processingTime): void
+    {
+        $stats = array_merge($this->analyzeOrders($orders), [
+            'processing_time' => $processingTime,
+            'last_run' => now()->toISOString(),
+            'performance_category' => $this->categorizePerformance($processingTime, count($orders))
+        ]);
+
+        Cache::put('ssl_orders_retrieval_stats', $stats, now()->addHours(6));
+    }
+
+    /**
+     * パフォーマンスメトリクス取得
+     */
+    private function getPerformanceMetrics(array $orders, float $processingTime): array
+    {
+        return [
+            'orders_per_second' => round(count($orders) / max($processingTime, 0.1), 2),
+            'processing_category' => $this->categorizePerformance($processingTime, count($orders)),
+            'data_quality_score' => $this->calculateDataQualityScore($orders)
+        ];
+    }
+
+    /**
+     * パフォーマンスカテゴリ判定
+     */
+    private function categorizePerformance(float $processingTime, int $orderCount): string
+    {
+        $ordersPerSecond = $orderCount / max($processingTime, 0.1);
+        
+        if ($ordersPerSecond > 10) {
+            return 'excellent';
+        } elseif ($ordersPerSecond > 5) {
+            return 'good';
+        } elseif ($ordersPerSecond > 2) {
+            return 'acceptable';
+        } else {
+            return 'slow';
+        }
+    }
+
+    /**
+     * データ品質スコア計算
+     */
+    private function calculateDataQualityScore(array $orders): float
+    {
+        if (empty($orders)) {
+            return 0.0;
+        }
+
+        $validDataCount = 0;
+        foreach ($orders as $order) {
+            if (!str_contains($order['domain'] ?? '', 'Domain N/A') && 
+                !empty($order['product_name']) && 
+                $order['product_name'] !== 'N/A') {
+                $validDataCount++;
+            }
+        }
+
+        return round(($validDataCount / count($orders)) * 100, 1);
+    }
+
+    /**
+     * Slack通知送信
+     */
+    private function sendSlackAlert(string $title, string $message, array $details = [], string $severity = 'warning'): void
+    {
+        try {
+            if (!config('services.slack.notifications.webhook_url')) {
+                Log::warning('Slack webhook URL not configured, skipping SSL orders alert', [
+                    'title' => $title,
+                    'severity' => $severity
+                ]);
+                return;
+            }
+
+            Notification::route('slack', config('services.slack.notifications.webhook_url'))
+                ->notify(new SSLSystemAlertNotification($title, $message, $details, $severity));
+
+            Log::info('SSL orders Slack alert sent successfully', [
+                'title' => $title,
+                'severity' => $severity,
+                'details_count' => count($details)
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send SSL orders Slack alert', [
+                'error' => $e->getMessage(),
+                'title' => $title,
+                'severity' => $severity
+            ]);
+        }
+    }
+
+    /**
+     * 注文が見つからない場合の通知判定
+     */
+    private function shouldNotifyNoOrders(): bool
+    {
+        // 前回の結果をチェック
+        $lastStats = Cache::get('ssl_orders_retrieval_stats');
+        
+        // 前回結果がある場合、前回も0件だった場合は通知しない
+        if ($lastStats && ($lastStats['total_orders'] ?? 0) === 0) {
+            return false;
+        }
+
+        return true;
     }
 }

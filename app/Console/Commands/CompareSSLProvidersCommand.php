@@ -3,9 +3,10 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Services\{GoGetSSLService, GoogleCertificateManagerService};
-use App\Services\CertificateProviderFactory;
-use Illuminate\Support\Facades\Log;
+use App\Services\{GoGetSSLService, GoogleCertificateManagerService, CertificateProviderFactory};
+use App\Notifications\SSLSystemAlertNotification;
+use Illuminate\Support\Facades\{Log, Notification};
+use Illuminate\Support\Facades\Cache;
 
 class CompareSSLProvidersCommand extends Command
 {
@@ -13,7 +14,8 @@ class CompareSSLProvidersCommand extends Command
                             {--domain=example.com : Domain to test certificate issuance}
                             {--include-costs : Include cost comparison}
                             {--export= : Export results to file (json, csv)}
-                            {--verbose : Show detailed comparison}';
+                            {--verbose : Show detailed comparison}
+                            {--notify : Send Slack notifications}';
 
     protected $description = 'Compare SSL certificate providers (GoGetSSL vs Google Certificate Manager)';
 
@@ -29,9 +31,17 @@ class CompareSSLProvidersCommand extends Command
         $includeCosts = $this->option('include-costs');
         $export = $this->option('export');
         $verbose = $this->option('verbose');
+        $notify = $this->option('notify');
 
         $this->info('🔍 Comparing SSL Certificate Providers');
         $this->newLine();
+
+        // 構造化ログ
+        Log::info('SSL Provider Comparison started', [
+            'command' => 'ssl:compare-providers',
+            'options' => $this->options(),
+            'domain' => $domain
+        ]);
 
         try {
             $results = [];
@@ -58,13 +68,46 @@ class CompareSSLProvidersCommand extends Command
                 $this->exportResults($results, $export);
             }
 
+            // 異常検知とSlack通知
+            $this->detectAnomaliesAndNotify($results, $notify);
+
+            // 構造化ログ
+            Log::info('SSL Provider Comparison completed successfully', array_merge($results, [
+                'status' => 'success',
+                'domain_tested' => $domain
+            ]));
+
+            $this->info('✅ Provider comparison completed successfully');
             return self::SUCCESS;
 
         } catch (\Exception $e) {
             $this->error('❌ Comparison failed: ' . $e->getMessage());
+            
             if ($this->option('verbose')) {
                 $this->error('Trace: ' . $e->getTraceAsString());
             }
+
+            // 重大エラーのSlack通知
+            if ($notify) {
+                $this->sendSlackAlert(
+                    'SSL Provider Comparison Failed',
+                    'SSL provider comparison command failed with exception',
+                    [
+                        'Error' => $e->getMessage(),
+                        'File' => $e->getFile() . ':' . $e->getLine(),
+                        'Command' => $this->signature,
+                        'Domain' => $domain
+                    ],
+                    'critical'
+                );
+            }
+
+            Log::error('SSL Provider Comparison failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'domain' => $domain
+            ]);
+
             return self::FAILURE;
         }
     }
@@ -475,5 +518,104 @@ class CompareSSLProvidersCommand extends Command
         }
 
         fclose($fp);
+    }
+
+    /**
+     * 異常検知とSlack通知
+     */
+    private function detectAnomaliesAndNotify(array $results, bool $notify): void
+    {
+        if (!$notify && !config('ssl-enhanced.monitoring.alert_on_failure', true)) {
+            return;
+        }
+
+        $failedProviders = array_filter($results, function ($result) {
+            return in_array($result['connection_status'], ['failed', 'error']);
+        });
+
+        // プロバイダー接続失敗の検知
+        if (!empty($failedProviders)) {
+            $this->sendSlackAlert(
+                'SSL Provider Connection Issues',
+                count($failedProviders) . ' SSL providers are experiencing connection issues',
+                [
+                    'Failed Providers' => implode(', ', array_column($failedProviders, 'provider')),
+                    'Total Providers Tested' => count($results),
+                    'Failure Rate' => round((count($failedProviders) / count($results)) * 100, 1) . '%',
+                    'Domain Tested' => $this->option('domain')
+                ],
+                'error'
+            );
+        }
+
+        // 成功時の定期報告（週1回）
+        if (empty($failedProviders) && $this->shouldSendWeeklyReport()) {
+            $this->sendSlackAlert(
+                'SSL Provider Comparison - All Systems Healthy',
+                'SSL provider comparison completed successfully',
+                [
+                    'Providers Tested' => count($results),
+                    'All Connections' => 'Successful',
+                    'Domain Tested' => $this->option('domain'),
+                    'Features Compared' => 'OK'
+                ],
+                'success'
+            );
+        }
+    }
+
+    /**
+     * Slack通知送信
+     */
+    private function sendSlackAlert(string $title, string $message, array $details = [], string $severity = 'warning'): void
+    {
+        try {
+            if (!config('services.slack.notifications.webhook_url')) {
+                Log::warning('Slack webhook URL not configured, skipping alert', [
+                    'title' => $title,
+                    'severity' => $severity
+                ]);
+                return;
+            }
+
+            Notification::route('slack', config('services.slack.notifications.webhook_url'))
+                ->notify(new SSLSystemAlertNotification($title, $message, $details, $severity));
+
+            Log::info('SSL comparison Slack alert sent successfully', [
+                'title' => $title,
+                'severity' => $severity,
+                'details_count' => count($details)
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send SSL comparison Slack alert', [
+                'error' => $e->getMessage(),
+                'title' => $title,
+                'severity' => $severity
+            ]);
+        }
+    }
+
+    /**
+     * 週次レポートが必要かチェック
+     */
+    private function shouldSendWeeklyReport(): bool
+    {
+        // 週1回の定期報告（日曜日）
+        if (now()->dayOfWeek !== 0) {
+            return false;
+        }
+
+        // 今週既に送信済みかチェック
+        $lastReportWeek = Cache::get('ssl_comparison_weekly_report_last_sent');
+        $currentWeek = now()->format('Y-W');
+        
+        if ($lastReportWeek === $currentWeek) {
+            return false;
+        }
+
+        // 週次レポート送信をマーク
+        Cache::put('ssl_comparison_weekly_report_last_sent', $currentWeek, now()->addWeeks(2));
+        
+        return true;
     }
 }
