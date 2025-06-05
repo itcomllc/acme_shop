@@ -116,9 +116,21 @@ Route::middleware(['auth', 'permission:admin.access'])->prefix('admin')->name('a
             return view('admin.system.health');
         })->name('system.health');
         
-        Route::get('system/logs', function () {
-            return view('admin.system.logs');
-        })->name('system.logs')->middleware('permission:system.logs.view');
+        Route::get('system/logs', [\App\Http\Controllers\Admin\AdminSystemLogsController::class, 'index'])
+            ->name('system.logs')
+            ->middleware('permission:system.logs.view');
+        
+        Route::get('system/logs/statistics', [\App\Http\Controllers\Admin\AdminSystemLogsController::class, 'getStatistics'])
+            ->name('system.logs.statistics')
+            ->middleware('permission:system.logs.view');
+        
+        Route::post('system/logs/clear', [\App\Http\Controllers\Admin\AdminSystemLogsController::class, 'clearLogs'])
+            ->name('system.logs.clear')
+            ->middleware('permission:system.logs.manage');
+        
+        Route::get('system/logs/download', [\App\Http\Controllers\Admin\AdminSystemLogsController::class, 'downloadLog'])
+            ->name('system.logs.download')
+            ->middleware('permission:system.logs.view');
     });
 });
 

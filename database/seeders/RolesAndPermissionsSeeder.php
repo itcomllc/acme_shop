@@ -219,6 +219,14 @@ class RolesAndPermissionsSeeder extends Seeder
                 'resource' => 'logs',
                 'action' => 'view'
             ],
+            [
+                'name' => 'system.logs.manage',
+                'display_name' => 'Manage System Logs',
+                'description' => 'Clear and manage system logs',
+                'category' => 'system',
+                'resource' => 'logs',
+                'action' => 'manage'
+            ],
         ];
 
         foreach ($permissions as $permissionData) {
