@@ -1,4 +1,5 @@
 import './bootstrap';
+import './theme-manager'; // theme-manager.jsをインポート
 import '../css/app.css';
 
 // Alpine.jsの重複を防ぐチェック
@@ -16,6 +17,15 @@ if (!window.Alpine) {
 
 // カスタムSSL Dashboard機能
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('App.js DOM loaded event');
+
+    // ThemeManagerの初期化を確認
+    if (window.ThemeManager) {
+        console.log('ThemeManager is available in app.js');
+    } else {
+        console.warn('ThemeManager not available in app.js');
+    }
+
     // Auto-hide notifications
     const notifications = document.querySelectorAll('.notification');
     notifications.forEach(notification => {
@@ -143,6 +153,7 @@ document.addEventListener('livewire:init', () => {
     
     // テーママネージャーとの連携
     if (window.ThemeManager) {
+        console.log('ThemeManager found in livewire:init');
         window.ThemeManager.addObserver((theme, effectiveTheme) => {
             console.log('Theme changed via ThemeManager:', theme, '->', effectiveTheme);
             
@@ -151,6 +162,20 @@ document.addEventListener('livewire:init', () => {
                 detail: { theme, effectiveTheme }
             }));
         });
+    } else {
+        console.warn('ThemeManager not found in livewire:init');
+        // 少し待ってから再試行
+        setTimeout(() => {
+            if (window.ThemeManager) {
+                console.log('ThemeManager found after delay');
+                window.ThemeManager.addObserver((theme, effectiveTheme) => {
+                    console.log('Theme changed via ThemeManager (delayed):', theme, '->', effectiveTheme);
+                    window.dispatchEvent(new CustomEvent('app-theme-changed', {
+                        detail: { theme, effectiveTheme }
+                    }));
+                });
+            }
+        }, 500);
     }
 });
 
@@ -172,6 +197,14 @@ document.addEventListener('livewire:navigated', () => {
             }
         }, 5000);
     });
+
+    // ThemeManagerの再確認
+    if (window.ThemeManager && window.ThemeManager.isInitialized) {
+        console.log('ThemeManager available after navigation');
+        window.ThemeManager.forceReapply();
+    } else {
+        console.warn('ThemeManager not available after navigation');
+    }
 });
 
 // エラーハンドリング
@@ -190,6 +223,13 @@ if ('requestIdleCallback' in window) {
     requestIdleCallback(() => {
         // アイドル時に実行する処理
         console.log('App initialization completed during idle time');
+        
+        // ThemeManagerの最終確認
+        if (window.ThemeManager) {
+            console.log('ThemeManager final check: OK');
+        } else {
+            console.warn('ThemeManager final check: NOT FOUND');
+        }
     });
 }
 

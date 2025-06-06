@@ -7,8 +7,18 @@ export default defineConfig({
             input: [
                 'resources/css/app.css',
                 'resources/js/app.js',
+                'resources/js/theme-manager.js'
             ],
             refresh: true,
         }),
     ],
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    'theme-manager': ['./resources/js/theme-manager.js']
+                }
+            }
+        }
+    }
 });
