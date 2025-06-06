@@ -19,13 +19,21 @@ new class extends Component
         $this->timezone = Auth::user()->timezone ?? config('app.timezone', 'UTC');
         $this->animations = session('animations', true);
         $this->sound_notifications = session('sound_notifications', false);
+        
+        // 初期テーマを適用
+        $this->dispatch('theme-loaded', theme: $this->theme);
     }
     
     // テーマ変更時にリアルタイムで適用
     public function updatedTheme($value): void
     {
         session(['theme' => $value]);
+        
+        // JavaScriptのThemeManagerに通知
         $this->dispatch('theme-changed', theme: $value);
+        
+        // ページ全体にテーマを適用
+        $this->js("window.setTheme('$value')");
     }
     
     public function updateAppearance(): void
@@ -41,7 +49,21 @@ new class extends Component
             Auth::user()->update(['timezone' => $this->timezone]);
         }
 
+        // テーマを確実に適用
+        $this->js("window.setTheme('{$this->theme}')");
+        
         $this->dispatch('appearance-updated');
+        
+        // 成功メッセージ
+        $this->js("
+            const message = document.getElementById('save-message');
+            if (message) {
+                message.classList.remove('hidden');
+                setTimeout(() => {
+                    message.classList.add('hidden');
+                }, 3000);
+            }
+        ");
     }
     
     public function resetToDefaults(): void
@@ -56,7 +78,23 @@ new class extends Component
     }
 }; ?>
 
-<section class="w-full">
+<div class="w-full" x-data="{ 
+    currentTheme: @entangle('theme'),
+    init() {
+        // 初期テーマ適用
+        this.applyTheme(this.currentTheme);
+        
+        // テーマ変更を監視
+        this.$watch('currentTheme', (newTheme) => {
+            this.applyTheme(newTheme);
+        });
+    },
+    applyTheme(theme) {
+        if (window.ThemeManager) {
+            window.ThemeManager.setTheme(theme);
+        }
+    }
+}">
     @include('partials.settings-heading')
 
     <x-settings.layout :heading="__('Appearance')" :subheading="__('Customize the look and feel of your SSL SaaS Platform experience.')">
@@ -196,120 +234,70 @@ new class extends Component
                 </p>
             </div>
         </div>
+
+        <!-- Debug Info (Development Only) -->
+        @if(config('app.debug'))
+        <div class="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+            <div class="text-xs text-gray-500 space-y-1">
+                <p>Current Theme: <span id="debug-current-theme">{{ $theme }}</span></p>
+                <p>Session Theme: {{ session('theme', 'not set') }}</p>
+                <p>User Timezone: {{ Auth::user()->timezone ?? 'not set' }}</p>
+                <button type="button" onclick="window.forceReapplyTheme()" class="text-blue-600 hover:underline">
+                    Force Reapply Theme
+                </button>
+            </div>
+        </div>
+        @endif
     </x-settings.layout>
-</section>
+
+    <style>
+    /* ラジオボタンの選択状態を視覚的に示す */
+    input[type="radio"]:checked + * {
+        border-color: rgb(59 130 246);
+        background-color: rgb(239 246 255);
+    }
+
+    .dark input[type="radio"]:checked + * {
+        background-color: rgba(59, 130, 246, 0.2);
+    }
+
+    /* フォーム要素のダークモード対応 */
+    .form-checkbox:checked {
+        background-color: rgb(59 130 246);
+        border-color: rgb(59 130 246);
+    }
+
+    .dark .form-checkbox {
+        background-color: rgb(55 65 81);
+        border-color: rgb(75 85 99);
+    }
+
+    .dark .form-checkbox:checked {
+        background-color: rgb(59 130 246);
+        border-color: rgb(59 130 246);
+    }
+    </style>
+</div>
 
 <script>
 document.addEventListener('livewire:init', () => {
-    // テーマ変更の即座反映
-    Livewire.on('theme-changed', (event) => {
-        console.log('Theme changed to:', event.theme);
-        applyTheme(event.theme);
-    });
-
-    Livewire.on('appearance-updated', () => {
-        const theme = @json($theme);
-        console.log('Appearance updated, applying theme:', theme);
-        applyTheme(theme);
-
-        // 成功メッセージ表示
-        showSaveMessage();
-    });
-
-    // 初期テーマ適用
-    document.addEventListener('DOMContentLoaded', function() {
+    console.log('Appearance component initialized');
+    
+    // 初期テーマの適用を確実にする
+    setTimeout(() => {
         const currentTheme = @json($theme);
-        console.log('Initial theme application:', currentTheme);
-        applyTheme(currentTheme);
-    });
-
-    function applyTheme(theme) {
-        const html = document.documentElement;
-        const body = document.body;
-        
-        console.log('Applying theme:', theme);
-        
-        // 既存のテーマクラスを削除
-        html.classList.remove('dark', 'light');
-        body.classList.remove('dark', 'light');
-        
-        if (theme === 'dark') {
-            html.classList.add('dark');
-            body.classList.add('dark');
-            console.log('Dark mode applied');
-        } else if (theme === 'light') {
-            html.classList.add('light');
-            body.classList.add('light');
-            console.log('Light mode applied');
-        } else if (theme === 'system') {
-            // システム設定に従う
-            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                html.classList.add('dark');
-                body.classList.add('dark');
-                console.log('System dark mode applied');
-            } else {
-                html.classList.add('light');
-                body.classList.add('light');
-                console.log('System light mode applied');
-            }
+        console.log('Ensuring initial theme is applied:', currentTheme);
+        if (window.ThemeManager) {
+            window.ThemeManager.setTheme(currentTheme);
         }
-        
-        // ストレージに保存
-        try {
-            localStorage.setItem('theme', theme);
-            console.log('Theme saved to localStorage:', theme);
-        } catch (e) {
-            console.warn('Could not save theme to localStorage:', e);
-        }
-    }
+    }, 100);
+});
 
-    function showSaveMessage() {
-        const message = document.getElementById('save-message');
-        if (message) {
-            message.classList.remove('hidden');
-            setTimeout(() => {
-                message.classList.add('hidden');
-            }, 3000);
-        }
-    }
-
-    // システムテーマ変更の監視
-    if (window.matchMedia) {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-            const currentTheme = @json($theme);
-            if (currentTheme === 'system') {
-                console.log('System theme changed, reapplying');
-                applyTheme('system');
-            }
-        });
+// テーマ変更をデバッグ表示に反映
+document.addEventListener('theme-applied', (event) => {
+    const debugElement = document.getElementById('debug-current-theme');
+    if (debugElement) {
+        debugElement.textContent = event.detail.theme;
     }
 });
 </script>
-
-<style>
-/* ラジオボタンの選択状態を視覚的に示す */
-input[type="radio"]:checked + * {
-    border-color: rgb(59 130 246);
-    background-color: rgb(239 246 255);
-}
-
-.dark input[type="radio"]:checked + * {
-    background-color: rgba(59, 130, 246, 0.2);
-}
-
-/* フォーム要素のダークモード対応 */
-.form-checkbox:checked {
-    background-color: rgb(59 130 246);
-    border-color: rgb(59 130 246);
-}
-
-.dark .form-checkbox {
-    background-color: rgb(55 65 81);
-    border-color: rgb(75 85 99);
-}
-
-.dark .form-checkbox:checked {
-    background-color: rgb(59 130 246);
-    border-color: rgb(59 130 246);
-}
-</style>
