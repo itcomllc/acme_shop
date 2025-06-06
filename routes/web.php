@@ -15,10 +15,18 @@ Route::view('dashboard', 'dashboard')
 Route::middleware(['auth'])->group(function () {
     Route::redirect('settings', 'settings/profile');
 
-    // 新しいLivewireコンポーネントを使用
-    Route::get('settings/profile', Profile::class)->name('settings.profile');
-    Route::get('settings/password', Password::class)->name('settings.password');
-    Route::get('settings/appearance', Appearance::class)->name('settings.appearance');
+    // Livewireコンポーネントを正しい方法でルーティング
+    Route::get('settings/profile', function () {
+        return view('livewire.settings.profile-wrapper');
+    })->name('settings.profile');
+    
+    Route::get('settings/password', function () {
+        return view('livewire.settings.password-wrapper');
+    })->name('settings.password');
+    
+    Route::get('settings/appearance', function () {
+        return view('livewire.settings.appearance-wrapper');
+    })->name('settings.appearance');
 
     // テーマAPI - 修正版
     Route::post('/api/user/preferences', function (Illuminate\Http\Request $request) {

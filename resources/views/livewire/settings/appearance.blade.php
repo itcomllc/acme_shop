@@ -118,10 +118,10 @@
                             </p>
                         </div>
 
-                        <!-- Language Selection -->
+                        <!-- Language Selection - wire:changeを使用 -->
                         <div>
                             <label for="language" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Language') }}</label>
-                            <select wire:model.live="language" name="language" id="language" class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200">
+                            <select wire:model="language" wire:change="$refresh" name="language" id="language" class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200">
                                 @foreach($availableLanguages as $code => $name)
                                     <option value="{{ $code }}">{{ $name }}</option>
                                 @endforeach
@@ -131,10 +131,10 @@
                             </p>
                         </div>
 
-                        <!-- Timezone Selection -->
+                        <!-- Timezone Selection - wire:changeを使用 -->
                         <div>
                             <label for="timezone" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Timezone') }}</label>
-                            <select wire:model.live="timezone" name="timezone" id="timezone" class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200">
+                            <select wire:model="timezone" wire:change="$refresh" name="timezone" id="timezone" class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200">
                                 @foreach($availableTimezones as $tz => $name)
                                     <option value="{{ $tz }}">{{ $name }}</option>
                                 @endforeach

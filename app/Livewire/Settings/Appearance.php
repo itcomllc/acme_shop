@@ -128,6 +128,9 @@ class Appearance extends Component
             // アプリケーションロケールを設定
             app()->setLocale($value);
             
+            // 即座に反映させるためのイベント発火
+            $this->dispatch('language-updated', language: $value);
+            
         } catch (\Exception $e) {
             Log::error('Error updating language', [
                 'language' => $value,
@@ -150,6 +153,9 @@ class Appearance extends Component
                 if ($user) {
                     $user->update(['timezone' => $value]);
                 }
+                
+                // 即座に反映させるためのイベント発火
+                $this->dispatch('timezone-updated', timezone: $value);
             }
         } catch (\Exception $e) {
             Log::error('Error updating timezone', [
@@ -314,15 +320,13 @@ class Appearance extends Component
     }
 
     /**
-     * レンダリング
+     * レンダリング - 修正版（コンポーネントのみ返す）
      */
     public function render()
     {
-        /** @var \Livewire\Component $view */
-        $view = view('livewire.settings.appearance', [
+        return view('livewire.settings.appearance', [
             'availableTimezones' => $this->getAvailableTimezones(),
             'availableLanguages' => $this->getAvailableLanguages(),
         ]);
-        return $view->extends('layouts.app');
     }
 }

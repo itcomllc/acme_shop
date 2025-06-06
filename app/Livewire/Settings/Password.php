@@ -28,8 +28,6 @@ class Password extends Component
 
     public function render()
     {
-        /** @var \Livewire\Component $view */
-        $view = view('livewire.settings.password');
-        return $view->extends('layouts.app');
+        return view('livewire.settings.password');
     }
 }
