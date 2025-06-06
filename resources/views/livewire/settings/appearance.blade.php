@@ -21,12 +21,12 @@ new class extends Component
         $this->sound_notifications = session('sound_notifications', false);
     }
     
-    // テーマ変更時にリアルタイムで適用（JavaScriptを使わない方法）
+    // テーマ変更時にリアルタイムで適用
     public function updatedTheme($value): void
     {
         session(['theme' => $value]);
         
-        // JavaScriptのThemeManagerに通知（カスタムイベント経由）
+        // JavaScriptのThemeManagerに即座に通知
         $this->dispatch('theme-changed', theme: $value);
     }
     
@@ -46,6 +46,7 @@ new class extends Component
         }
         
         $this->dispatch('appearance-updated', theme: $this->theme);
+        session()->flash('status', 'appearance-updated');
     }
     
     public function resetToDefaults(): void
@@ -62,12 +63,20 @@ new class extends Component
 
 <div class="w-full" 
      x-data="appearanceComponent()" 
+     x-init="init()"
      @theme-changed.window="handleThemeChange($event.detail.theme)"
      @appearance-updated.window="handleAppearanceUpdate($event.detail.theme)">
      
     @include('partials.settings-heading')
 
     <x-settings.layout :heading="__('Appearance')" :subheading="__('Customize the look and feel of your SSL SaaS Platform experience.')">
+        <!-- 成功メッセージ -->
+        @if (session('status') === 'appearance-updated')
+            <div class="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg dark:bg-green-900 dark:border-green-700 dark:text-green-300">
+                {{ __('Appearance settings updated successfully.') }}
+            </div>
+        @endif
+
         <form wire:submit="updateAppearance" class="my-6 w-full space-y-6">
             <!-- Theme Selection -->
             <div>
@@ -181,9 +190,9 @@ new class extends Component
                 <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ __('See how your settings will look in the SSL dashboard.') }}</p>
             </div>
 
-            <div class="space-y-4">
+            <div class="space-y-4" id="theme-preview">
                 <!-- Sample SSL Certificate Card -->
-                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800 transition-colors">
                     <div class="flex items-center justify-between">
                         <div>
                             <h3 class="font-medium text-gray-900 dark:text-white">
@@ -212,9 +221,14 @@ new class extends Component
                 <p>Current Theme: <span id="debug-current-theme">{{ $theme }}</span></p>
                 <p>Session Theme: {{ session('theme', 'not set') }}</p>
                 <p>User Timezone: {{ Auth::user()->timezone ?? 'not set' }}</p>
-                <button type="button" onclick="window.forceReapplyTheme && window.forceReapplyTheme()" class="text-blue-600 hover:underline">
-                    Force Reapply Theme
-                </button>
+                <div class="flex gap-2 mt-2">
+                    <button type="button" onclick="window.forceReapplyTheme && window.forceReapplyTheme()" class="text-blue-600 hover:underline text-xs">
+                        Force Reapply Theme
+                    </button>
+                    <button type="button" onclick="console.log('ThemeManager:', window.ThemeManager)" class="text-blue-600 hover:underline text-xs">
+                        Log ThemeManager
+                    </button>
+                </div>
             </div>
         </div>
         @endif
@@ -224,25 +238,14 @@ new class extends Component
     function appearanceComponent() {
         return {
             themeManagerReady: false,
+            currentTheme: @json($theme),
             
             init() {
-                console.log('Appearance component initialized');
-                this.initializeThemeManager();
+                console.log('Appearance component initialized with theme:', this.currentTheme);
+                this.waitForThemeManager();
             },
 
-            initializeThemeManager() {
-                // ThemeManagerの準備を待つ
-                this.waitForThemeManager(() => {
-                    this.themeManagerReady = true;
-                    console.log('ThemeManager is ready');
-                    
-                    // 初期テーマを適用
-                    const initialTheme = @json($theme);
-                    this.applyTheme(initialTheme);
-                });
-            },
-
-            waitForThemeManager(callback) {
+            waitForThemeManager() {
                 let attempts = 0;
                 const maxAttempts = 50; // 5秒待機
                 
@@ -251,18 +254,30 @@ new class extends Component
                     
                     if (window.ThemeManager && typeof window.setTheme === 'function') {
                         clearInterval(checkInterval);
-                        callback();
+                        this.themeManagerReady = true;
+                        console.log('ThemeManager is ready for appearance component');
+                        
+                        // 初期テーマを適用
+                        this.applyTheme(this.currentTheme);
+                        
+                        // ThemeManagerのオブザーバーに登録
+                        if (window.ThemeManager.addObserver) {
+                            window.ThemeManager.addObserver((theme, effectiveTheme) => {
+                                this.updatePreview(effectiveTheme);
+                            });
+                        }
                     } else if (attempts >= maxAttempts) {
                         clearInterval(checkInterval);
-                        console.warn('ThemeManager not available, using fallback');
+                        console.warn('ThemeManager not available after 5 seconds, using fallback');
                         this.themeManagerReady = false;
-                        callback();
+                        this.applyTheme(this.currentTheme);
                     }
                 }, 100);
             },
 
             applyTheme(theme) {
-                console.log('Applying theme:', theme);
+                console.log('Applying theme in appearance component:', theme);
+                this.currentTheme = theme;
                 
                 if (this.themeManagerReady && window.ThemeManager) {
                     try {
@@ -275,6 +290,9 @@ new class extends Component
                 } else {
                     this.fallbackApplyTheme(theme);
                 }
+                
+                // プレビューを更新
+                this.updatePreview(this.getEffectiveTheme(theme));
             },
 
             fallbackApplyTheme(theme) {
@@ -300,8 +318,30 @@ new class extends Component
                 }
             },
 
+            getEffectiveTheme(theme) {
+                if (theme === 'system') {
+                    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+                return theme;
+            },
+
+            updatePreview(effectiveTheme) {
+                // プレビューエリアのテーマを更新
+                const preview = document.getElementById('theme-preview');
+                if (preview) {
+                    const cards = preview.querySelectorAll('.border');
+                    cards.forEach(card => {
+                        if (effectiveTheme === 'dark') {
+                            card.classList.add('dark:border-gray-700', 'dark:bg-gray-800');
+                        } else {
+                            card.classList.remove('dark:border-gray-700', 'dark:bg-gray-800');
+                        }
+                    });
+                }
+            },
+
             handleThemeChange(theme) {
-                console.log('Theme change event received:', theme);
+                console.log('Theme change event received in appearance component:', theme);
                 this.applyTheme(theme);
             },
 
@@ -333,17 +373,28 @@ new class extends Component
             }
         });
     });
+
+    // ページナビゲーション時の処理
+    document.addEventListener('livewire:navigated', () => {
+        console.log('Navigated to appearance page');
+        // 必要に応じてテーマを再適用
+        if (window.ThemeManager) {
+            setTimeout(() => {
+                window.ThemeManager.forceReapply();
+            }, 50);
+        }
+    });
     </script>
 
     <style>
     /* ラジオボタンの選択状態を視覚的に示す */
     input[type="radio"]:checked + * {
-        border-color: rgb(59 130 246);
-        background-color: rgb(239 246 255);
+        border-color: rgb(59 130 246) !important;
+        background-color: rgb(239 246 255) !important;
     }
 
     .dark input[type="radio"]:checked + * {
-        background-color: rgba(59, 130, 246, 0.2);
+        background-color: rgba(59, 130, 246, 0.2) !important;
     }
 
     /* フォーム要素のダークモード対応 */
@@ -360,6 +411,11 @@ new class extends Component
     .dark .form-checkbox:checked {
         background-color: rgb(59 130 246);
         border-color: rgb(59 130 246);
+    }
+
+    /* アニメーション効果 */
+    .transition-colors {
+        transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
     }
     </style>
 </div>

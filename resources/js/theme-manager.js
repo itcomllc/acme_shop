@@ -1,8 +1,10 @@
-// Theme Manager for SSL SaaS Platform - Enhanced Version with Error Handling
+// Enhanced Theme Manager for SSL SaaS Platform - Fixed Version
 class ThemeManager {
     constructor() {
         this.currentTheme = 'system';
         this.isInitialized = false;
+        this.pendingCallbacks = [];
+        this.observers = [];
         this.init();
     }
 
@@ -12,22 +14,31 @@ class ThemeManager {
         
         // DOMContentLoadedでも再度確認
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this.applyStoredTheme());
+            document.addEventListener('DOMContentLoaded', () => this.completeInitialization());
         } else {
-            this.applyStoredTheme();
+            this.completeInitialization();
         }
+    }
 
-        // システムテーマ変更の監視
+    completeInitialization() {
+        this.applyStoredTheme();
         this.watchSystemTheme();
-        
-        // Livewireイベントのリスナー設定
         this.setupLivewireListeners();
-        
-        // ページ遷移時の処理（Livewire navigate）
         this.setupNavigationListeners();
         
         this.isInitialized = true;
-        console.log('ThemeManager initialized');
+        
+        // 待機中のコールバックを実行
+        this.pendingCallbacks.forEach(callback => {
+            try {
+                callback();
+            } catch (error) {
+                console.warn('Error in pending callback:', error);
+            }
+        });
+        this.pendingCallbacks = [];
+        
+        console.log('ThemeManager fully initialized');
     }
 
     applyStoredThemeImmediately() {
@@ -120,6 +131,9 @@ class ThemeManager {
         // サーバーサイドと同期（セッション更新）
         this.syncWithServer(theme);
 
+        // オブザーバーに通知
+        this.notifyObservers(theme, effectiveTheme);
+
         // カスタムイベントを発火
         window.dispatchEvent(new CustomEvent('theme-applied', { 
             detail: { theme, effectiveTheme } 
@@ -146,23 +160,34 @@ class ThemeManager {
         if (window.matchMedia) {
             const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
             
-            mediaQuery.addEventListener('change', (e) => {
+            const handleChange = (e) => {
                 const currentTheme = this.getCurrentTheme();
                 if (currentTheme === 'system') {
                     console.log('System color scheme changed, reapplying theme');
                     this.applyThemeToDOM('system');
                 }
-            });
+            };
+
+            // 新しいAPIを使用（古いAPIのフォールバック付き）
+            if (mediaQuery.addEventListener) {
+                mediaQuery.addEventListener('change', handleChange);
+            } else {
+                mediaQuery.addListener(handleChange);
+            }
         }
     }
 
     setupLivewireListeners() {
         // Livewireが利用可能になった時点でリスナーを設定
-        document.addEventListener('livewire:init', () => {
-            console.log('Setting up Livewire theme listeners');
-            
+        const setupListeners = () => {
             if (typeof Livewire !== 'undefined') {
                 try {
+                    // 既存のリスナーを削除（重複を防ぐ）
+                    if (this._livewireListenersSetup) {
+                        return;
+                    }
+                    this._livewireListenersSetup = true;
+
                     Livewire.on('theme-changed', (event) => {
                         console.log('Livewire theme-changed event:', event);
                         const theme = Array.isArray(event) ? event[0]?.theme : event.theme;
@@ -176,57 +201,81 @@ class ThemeManager {
                         // 現在のテーマを再適用
                         this.applyThemeToDOM(this.currentTheme);
                     });
+
+                    console.log('Livewire theme listeners setup completed');
                 } catch (error) {
                     console.warn('Error setting up Livewire listeners:', error);
                 }
             }
-        });
+        };
 
-        // Livewireが既に初期化されている場合
-        if (typeof Livewire !== 'undefined') {
-            this.setupLivewireEvents();
-        }
-    }
-
-    setupLivewireEvents() {
-        try {
-            Livewire.on('theme-changed', (event) => {
-                console.log('Livewire theme-changed event:', event);
-                const theme = Array.isArray(event) ? event[0]?.theme : event.theme;
-                if (theme) {
-                    this.applyThemeToDOM(theme);
-                }
-            });
-
-            Livewire.on('appearance-updated', () => {
-                console.log('Livewire appearance-updated event');
-                this.applyThemeToDOM(this.currentTheme);
-            });
-        } catch (error) {
-            console.log('Error setting up Livewire events:', error);
-        }
+        // 複数のタイミングで試行
+        document.addEventListener('livewire:init', setupListeners);
+        document.addEventListener('livewire:navigated', setupListeners);
+        
+        // 即座に試行
+        setupListeners();
+        
+        // 少し待ってから再試行
+        setTimeout(setupListeners, 100);
     }
 
     setupNavigationListeners() {
         // Livewire navigate イベント
         document.addEventListener('livewire:navigate', () => {
-            console.log('Livewire navigate - reapplying theme');
-            // ナビゲーション後にテーマを再適用
-            setTimeout(() => {
-                this.applyThemeToDOM(this.currentTheme);
-            }, 50);
+            console.log('Livewire navigate - preserving theme');
+            // ナビゲーション中はテーマを保持
         });
 
         // Livewire navigated イベント  
         document.addEventListener('livewire:navigated', () => {
             console.log('Livewire navigated - reapplying theme');
-            this.applyThemeToDOM(this.currentTheme);
+            // ナビゲーション完了後にテーマを再適用
+            setTimeout(() => {
+                this.applyThemeToDOM(this.currentTheme);
+            }, 10);
+        });
+
+        // ページが表示されたときの処理
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                // ページが再表示されたときにテーマを確認
+                setTimeout(() => {
+                    this.applyThemeToDOM(this.currentTheme);
+                }, 50);
+            }
+        });
+
+        // ページフォーカス時の処理
+        window.addEventListener('focus', () => {
+            setTimeout(() => {
+                this.applyThemeToDOM(this.currentTheme);
+            }, 50);
         });
 
         // 通常のページ遷移も監視
         window.addEventListener('beforeunload', () => {
             // ページ遷移前にテーマを保存
             localStorage.setItem('theme', this.currentTheme);
+        });
+    }
+
+    // オブザーバーパターンの実装
+    addObserver(callback) {
+        this.observers.push(callback);
+    }
+
+    removeObserver(callback) {
+        this.observers = this.observers.filter(obs => obs !== callback);
+    }
+
+    notifyObservers(theme, effectiveTheme) {
+        this.observers.forEach(observer => {
+            try {
+                observer(theme, effectiveTheme);
+            } catch (error) {
+                console.warn('Error in theme observer:', error);
+            }
         });
     }
 
@@ -267,19 +316,24 @@ class ThemeManager {
         this.applyThemeToDOM(this.currentTheme);
     }
 
-    // 初期化チェック用メソッド
-    waitForInitialization(callback, maxWait = 5000) {
-        const startTime = Date.now();
-        const checkInterval = setInterval(() => {
-            if (this.isInitialized) {
-                clearInterval(checkInterval);
+    // 初期化完了を待つ
+    whenReady(callback) {
+        if (this.isInitialized) {
+            try {
                 callback();
-            } else if (Date.now() - startTime > maxWait) {
-                clearInterval(checkInterval);
-                console.warn('ThemeManager initialization timeout');
-                callback();
+            } catch (error) {
+                console.warn('Error in theme ready callback:', error);
             }
-        }, 50);
+        } else {
+            this.pendingCallbacks.push(callback);
+        }
+    }
+
+    // クリーンアップ
+    destroy() {
+        this.observers = [];
+        this.pendingCallbacks = [];
+        this._livewireListenersSetup = false;
     }
 }
 
@@ -340,30 +394,52 @@ function initializeThemeManager() {
                 console.error('Error force reapplying theme:', error);
             }
         };
+
+        // 初期化完了を待つヘルパー
+        window.whenThemeReady = (callback) => {
+            try {
+                if (window.ThemeManager) {
+                    window.ThemeManager.whenReady(callback);
+                } else {
+                    setTimeout(() => {
+                        if (window.ThemeManager) {
+                            window.ThemeManager.whenReady(callback);
+                        }
+                    }, 100);
+                }
+            } catch (error) {
+                console.error('Error in whenThemeReady:', error);
+            }
+        };
     }
     
     return themeManagerInstance;
 }
 
-// 即座に初期化を開始
-initializeThemeManager();
-
-// DOMContentLoadedでも確実に初期化
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeThemeManager);
-} else {
+// 複数回の初期化を防ぐフラグ
+if (!window._themeManagerInitialized) {
+    window._themeManagerInitialized = true;
+    
+    // 即座に初期化を開始
     initializeThemeManager();
-}
 
-// ページ読み込み完了後にも再確認
-window.addEventListener('load', () => {
-    console.log('Page fully loaded, ensuring theme manager is ready');
-    if (window.ThemeManager) {
-        window.ThemeManager.forceReapply();
+    // DOMContentLoadedでも確実に初期化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeThemeManager);
     } else {
         initializeThemeManager();
     }
-});
+
+    // ページ読み込み完了後にも再確認
+    window.addEventListener('load', () => {
+        console.log('Page fully loaded, ensuring theme manager is ready');
+        if (window.ThemeManager) {
+            window.ThemeManager.forceReapply();
+        } else {
+            initializeThemeManager();
+        }
+    });
+}
 
 // テーマ適用の確認用
-console.log('Theme Manager script loaded');
+console.log('Enhanced Theme Manager script loaded');
