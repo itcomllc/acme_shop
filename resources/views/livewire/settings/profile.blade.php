@@ -47,6 +47,19 @@ new class extends Component
         $this->reset(['current_password', 'password', 'password_confirmation']);
         $this->dispatch('password-updated');
     }
+    
+    public function resendVerificationNotification(): void
+    {
+        $user = Auth::user();
+
+        if ($user->hasVerifiedEmail()) {
+            $this->redirectIntended(default: route('dashboard', absolute: false));
+            return;
+        }
+
+        $user->sendEmailVerificationNotification();
+        session()->flash('status', 'verification-link-sent');
+    }
 }; ?>
 
 <section class="w-full">
