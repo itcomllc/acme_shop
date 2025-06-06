@@ -11,6 +11,7 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+    
 
     <!-- Theme initialization script (必ずCSSより前に実行) -->
     <script>
@@ -214,8 +215,9 @@
         console.log('Document classes:', document.documentElement.className);
     </script>
 
-    <!-- Alpine.js -->
+    <!-- Alpine.js
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+     -->
 </body>
 
 </html>
