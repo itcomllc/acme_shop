@@ -1,7 +1,8 @@
-// Theme Manager for SSL SaaS Platform - Enhanced Version
+// Theme Manager for SSL SaaS Platform - Enhanced Version with Error Handling
 class ThemeManager {
     constructor() {
         this.currentTheme = 'system';
+        this.isInitialized = false;
         this.init();
     }
 
@@ -25,6 +26,7 @@ class ThemeManager {
         // ページ遷移時の処理（Livewire navigate）
         this.setupNavigationListeners();
         
+        this.isInitialized = true;
         console.log('ThemeManager initialized');
     }
 
@@ -159,19 +161,25 @@ class ThemeManager {
         document.addEventListener('livewire:init', () => {
             console.log('Setting up Livewire theme listeners');
             
-            Livewire.on('theme-changed', (event) => {
-                console.log('Livewire theme-changed event:', event);
-                const theme = event.theme || event[0]?.theme;
-                if (theme) {
-                    this.applyThemeToDOM(theme);
-                }
-            });
+            if (typeof Livewire !== 'undefined') {
+                try {
+                    Livewire.on('theme-changed', (event) => {
+                        console.log('Livewire theme-changed event:', event);
+                        const theme = Array.isArray(event) ? event[0]?.theme : event.theme;
+                        if (theme) {
+                            this.applyThemeToDOM(theme);
+                        }
+                    });
 
-            Livewire.on('appearance-updated', () => {
-                console.log('Livewire appearance-updated event');
-                // 現在のテーマを再適用
-                this.applyThemeToDOM(this.currentTheme);
-            });
+                    Livewire.on('appearance-updated', () => {
+                        console.log('Livewire appearance-updated event');
+                        // 現在のテーマを再適用
+                        this.applyThemeToDOM(this.currentTheme);
+                    });
+                } catch (error) {
+                    console.warn('Error setting up Livewire listeners:', error);
+                }
+            }
         });
 
         // Livewireが既に初期化されている場合
@@ -184,7 +192,7 @@ class ThemeManager {
         try {
             Livewire.on('theme-changed', (event) => {
                 console.log('Livewire theme-changed event:', event);
-                const theme = event.theme || event[0]?.theme;
+                const theme = Array.isArray(event) ? event[0]?.theme : event.theme;
                 if (theme) {
                     this.applyThemeToDOM(theme);
                 }
@@ -258,24 +266,104 @@ class ThemeManager {
         console.log('Force reapplying theme:', this.currentTheme);
         this.applyThemeToDOM(this.currentTheme);
     }
+
+    // 初期化チェック用メソッド
+    waitForInitialization(callback, maxWait = 5000) {
+        const startTime = Date.now();
+        const checkInterval = setInterval(() => {
+            if (this.isInitialized) {
+                clearInterval(checkInterval);
+                callback();
+            } else if (Date.now() - startTime > maxWait) {
+                clearInterval(checkInterval);
+                console.warn('ThemeManager initialization timeout');
+                callback();
+            }
+        }, 50);
+    }
 }
 
-// グローバルに利用可能にする
-window.ThemeManager = new ThemeManager();
+// ThemeManagerの初期化を安全に行う
+let themeManagerInstance = null;
 
-// 便利なヘルパー関数
-window.setTheme = (theme) => window.ThemeManager.setTheme(theme);
-window.getCurrentTheme = () => window.ThemeManager.getCurrentTheme();
-window.getEffectiveTheme = () => window.ThemeManager.getEffectiveTheme();
+function initializeThemeManager() {
+    if (!themeManagerInstance) {
+        themeManagerInstance = new ThemeManager();
+        
+        // グローバルに利用可能にする
+        window.ThemeManager = themeManagerInstance;
+        
+        // 便利なヘルパー関数（エラーハンドリング付き）
+        window.setTheme = (theme) => {
+            try {
+                if (window.ThemeManager) {
+                    window.ThemeManager.setTheme(theme);
+                } else {
+                    console.warn('ThemeManager not available, queuing theme setting');
+                    // ThemeManagerが利用可能になるまで待機
+                    setTimeout(() => {
+                        if (window.ThemeManager) {
+                            window.ThemeManager.setTheme(theme);
+                        }
+                    }, 100);
+                }
+            } catch (error) {
+                console.error('Error setting theme:', error);
+            }
+        };
+        
+        window.getCurrentTheme = () => {
+            try {
+                return window.ThemeManager ? window.ThemeManager.getCurrentTheme() : 'system';
+            } catch (error) {
+                console.error('Error getting current theme:', error);
+                return 'system';
+            }
+        };
+        
+        window.getEffectiveTheme = () => {
+            try {
+                return window.ThemeManager ? window.ThemeManager.getEffectiveTheme() : 'system';
+            } catch (error) {
+                console.error('Error getting effective theme:', error);
+                return 'system';
+            }
+        };
+        
+        // デバッグ用
+        window.forceReapplyTheme = () => {
+            try {
+                if (window.ThemeManager) {
+                    window.ThemeManager.forceReapply();
+                }
+            } catch (error) {
+                console.error('Error force reapplying theme:', error);
+            }
+        };
+    }
+    
+    return themeManagerInstance;
+}
 
-// デバッグ用
-window.forceReapplyTheme = () => window.ThemeManager.forceReapply();
+// 即座に初期化を開始
+initializeThemeManager();
 
-// テーマ適用の確認用
-console.log('Theme Manager initialized. Current effective theme:', window.getEffectiveTheme());
+// DOMContentLoadedでも確実に初期化
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeThemeManager);
+} else {
+    initializeThemeManager();
+}
 
 // ページ読み込み完了後にも再確認
 window.addEventListener('load', () => {
-    console.log('Page fully loaded, ensuring theme is applied');
-    window.ThemeManager.forceReapply();
+    console.log('Page fully loaded, ensuring theme manager is ready');
+    if (window.ThemeManager) {
+        window.ThemeManager.forceReapply();
+    } else {
+        initializeThemeManager();
+    }
 });
+
+// テーマ適用の確認用
+console.log('Theme Manager script loaded');
