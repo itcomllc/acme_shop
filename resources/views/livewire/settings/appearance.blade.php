@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\{Hash, Auth};
 use Livewire\Volt\Component;
 
 new class extends Component
@@ -15,7 +16,7 @@ new class extends Component
         // Load user preferences from session or database
         $this->theme = session('theme', 'system');
         $this->language = session('locale', 'en');
-        $this->timezone = auth()->user()->timezone ?? config('app.timezone', 'UTC');
+        $this->timezone = Auth::user()->timezone ?? config('app.timezone', 'UTC');
         $this->animations = session('animations', true);
         $this->sound_notifications = session('sound_notifications', false);
     }
@@ -29,8 +30,8 @@ new class extends Component
         session(['sound_notifications' => $this->sound_notifications]);
         
         // Update user timezone in database
-        if (auth()->user()) {
-            auth()->user()->update(['timezone' => $this->timezone]);
+        if (Auth::user()) {
+            Auth::user()->update(['timezone' => $this->timezone]);
         }
 
         $this->dispatch('appearance-updated');

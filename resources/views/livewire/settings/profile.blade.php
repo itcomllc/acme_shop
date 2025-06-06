@@ -1,6 +1,6 @@
 <?php
 
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\{Auth, Hash};
 use Livewire\Volt\Component;
 
 new class extends Component
@@ -49,142 +49,141 @@ new class extends Component
     }
 }; ?>
 
-<x-layouts.app.sidebar title="Settings">
-    <flux:main>
-        <div class="space-y-6">
-            @include('partials.settings-heading')
+<section class="w-full">
+    @include('partials.settings-heading')
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Profile Information -->
-                <div class="lg:col-span-2">
-                    <flux:card>
-                        <flux:card.header>
-                            <flux:heading size="lg">{{ __('Profile Information') }}</flux:heading>
-                            <flux:subheading>{{ __("Update your account's profile information and email address.") }}</flux:subheading>
-                        </flux:card.header>
+    <x-settings.layout :heading="__('Profile')" :subheading="__('Update your name and email address')">
+        <form wire:submit="updateProfile" class="my-6 w-full space-y-6">
+            <flux:input wire:model="name" :label="__('Name')" type="text" required autofocus autocomplete="name" />
 
-                        <form wire:submit="updateProfile" class="space-y-6">
-                            <flux:field>
-                                <flux:label>{{ __('Name') }}</flux:label>
-                                <flux:input wire:model="name" name="name" required />
-                                <flux:error name="name" />
-                            </flux:field>
+            <div>
+                <flux:input wire:model="email" :label="__('Email')" type="email" required autocomplete="email" />
 
-                            <flux:field>
-                                <flux:label>{{ __('Email') }}</flux:label>
-                                <flux:input wire:model="email" name="email" type="email" required />
-                                <flux:error name="email" />
-                            </flux:field>
+                @if (Auth::user() instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! Auth::user()->hasVerifiedEmail())
+                    <div>
+                        <flux:text class="mt-4">
+                            {{ __('Your email address is unverified.') }}
 
-                            @if (Auth::user() instanceof \Illuminate\Contracts\Auth\MustVerifyEmail && ! Auth::user()->hasVerifiedEmail())
-                                <div>
-                                    <p class="text-sm text-zinc-800 dark:text-zinc-200">
-                                        {{ __('Your email address is unverified.') }}
-                                        <button type="button" class="underline text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100">
-                                            {{ __('Click here to re-send the verification email.') }}
-                                        </button>
-                                    </p>
-                                </div>
-                            @endif
+                            <flux:link class="text-sm cursor-pointer" wire:click.prevent="resendVerificationNotification">
+                                {{ __('Click here to re-send the verification email.') }}
+                            </flux:link>
+                        </flux:text>
 
-                            <flux:button type="submit" variant="primary">{{ __('Save') }}</flux:button>
-                        </form>
-                    </flux:card>
-                </div>
-
-                <!-- Update Password -->
-                <div>
-                    <flux:card>
-                        <flux:card.header>
-                            <flux:heading size="lg">{{ __('Update Password') }}</flux:heading>
-                            <flux:subheading>{{ __('Ensure your account is using a long, random password to stay secure.') }}</flux:subheading>
-                        </flux:card.header>
-
-                        <form wire:submit="updatePassword" class="space-y-6">
-                            <flux:field>
-                                <flux:label>{{ __('Current Password') }}</flux:label>
-                                <flux:input wire:model="current_password" name="current_password" type="password" />
-                                <flux:error name="current_password" />
-                            </flux:field>
-
-                            <flux:field>
-                                <flux:label>{{ __('New Password') }}</flux:label>
-                                <flux:input wire:model="password" name="password" type="password" />
-                                <flux:error name="password" />
-                            </flux:field>
-
-                            <flux:field>
-                                <flux:label>{{ __('Confirm Password') }}</flux:label>
-                                <flux:input wire:model="password_confirmation" name="password_confirmation" type="password" />
-                                <flux:error name="password_confirmation" />
-                            </flux:field>
-
-                            <flux:button type="submit" variant="primary">{{ __('Save') }}</flux:button>
-                        </form>
-                    </flux:card>
-                </div>
+                        @if (session('status') === 'verification-link-sent')
+                            <flux:text class="mt-2 font-medium !dark:text-green-400 !text-green-600">
+                                {{ __('A new verification link has been sent to your email address.') }}
+                            </flux:text>
+                        @endif
+                    </div>
+                @endif
             </div>
 
-            <!-- SSL-related Settings -->
-            <div class="mt-8">
-                <flux:card>
-                    <flux:card.header>
-                        <flux:heading size="lg">{{ __('SSL Certificate Preferences') }}</flux:heading>
-                        <flux:subheading>{{ __('Configure your SSL certificate and notification preferences.') }}</flux:subheading>
-                    </flux:card.header>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center justify-end">
+                    <flux:button variant="primary" type="submit" class="w-full">{{ __('Save') }}</flux:button>
+                </div>
+
+                <x-action-message class="me-3" on="profile-updated">
+                    {{ __('Saved.') }}
+                </x-action-message>
+            </div>
+        </form>
+
+        <!-- Password Update Section -->
+        <div class="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+            <div class="mb-6">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">{{ __('Update Password') }}</h3>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ __('Ensure your account is using a long, random password to stay secure.') }}</p>
+            </div>
+
+            <form wire:submit="updatePassword" class="space-y-6">
+                <flux:input 
+                    wire:model="current_password" 
+                    :label="__('Current Password')" 
+                    type="password" 
+                    autocomplete="current-password"
+                />
+
+                <flux:input 
+                    wire:model="password" 
+                    :label="__('New Password')" 
+                    type="password" 
+                    autocomplete="new-password"
+                />
+
+                <flux:input 
+                    wire:model="password_confirmation" 
+                    :label="__('Confirm Password')" 
+                    type="password" 
+                    autocomplete="new-password"
+                />
+
+                <div class="flex items-center gap-4">
+                    <flux:button variant="primary" type="submit">{{ __('Update Password') }}</flux:button>
+                    
+                    <x-action-message class="me-3" on="password-updated">
+                        {{ __('Password updated.') }}
+                    </x-action-message>
+                </div>
+            </form>
+        </div>
+
+        <!-- SSL Certificate Preferences -->
+        @auth
+            @if(Auth::user()->activeSubscription)
+                <div class="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+                    <div class="mb-6">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">{{ __('SSL Certificate Preferences') }}</h3>
+                        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ __('Configure your SSL certificate and notification preferences.') }}</p>
+                    </div>
 
                     <div class="space-y-6">
-                        @auth
-                            @if(Auth::user()->activeSubscription)
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <flux:field>
-                                        <flux:label>{{ __('Default Provider') }}</flux:label>
-                                        <flux:select name="default_provider">
-                                            <option value="gogetssl">GoGetSSL</option>
-                                            <option value="google_certificate_manager">Google Certificate Manager</option>
-                                            <option value="lets_encrypt">Let's Encrypt</option>
-                                        </flux:select>
-                                    </flux:field>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <flux:select name="default_provider" :label="__('Default Provider')">
+                                    <option value="gogetssl">GoGetSSL</option>
+                                    <option value="google_certificate_manager">Google Certificate Manager</option>
+                                    <option value="lets_encrypt">Let's Encrypt</option>
+                                </flux:select>
+                            </div>
 
-                                    <flux:field>
-                                        <flux:label>{{ __('Certificate Type') }}</flux:label>
-                                        <flux:select name="certificate_type" disabled>
-                                            <option value="{{ Auth::user()->activeSubscription->certificate_type }}">
-                                                {{ Auth::user()->activeSubscription->certificate_type }}
-                                            </option>
-                                        </flux:select>
-                                        <flux:description>{{ __('Determined by your subscription plan') }}</flux:description>
-                                    </flux:field>
-                                </div>
+                            <div>
+                                <flux:select name="certificate_type" :label="__('Certificate Type')" disabled>
+                                    <option value="{{ Auth::user()->activeSubscription->certificate_type }}">
+                                        {{ Auth::user()->activeSubscription->certificate_type }}
+                                    </option>
+                                </flux:select>
+                                <flux:text class="mt-1 text-sm text-gray-500">{{ __('Determined by your subscription plan') }}</flux:text>
+                            </div>
+                        </div>
 
-                                <div class="flex items-center space-x-3">
-                                    <flux:checkbox name="email_notifications" checked />
-                                    <flux:label>{{ __('Email notifications for certificate expiry') }}</flux:label>
-                                </div>
-
-                                <div class="flex items-center space-x-3">
-                                    <flux:checkbox name="auto_renewal" checked />
-                                    <flux:label>{{ __('Enable automatic certificate renewal') }}</flux:label>
-                                </div>
-                            @else
-                                <div class="text-center py-8">
-                                    <flux:icon.shield-exclamation class="mx-auto h-12 w-12 text-zinc-400" />
-                                    <h3 class="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">{{ __('No SSL Subscription') }}</h3>
-                                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ __('You need an active SSL subscription to configure certificate preferences.') }}</p>
-                                    <div class="mt-6">
-                                        <flux:button href="{{ route('ssl.dashboard') }}" variant="primary">
-                                            {{ __('Get SSL Subscription') }}
-                                        </flux:button>
-                                    </div>
-                                </div>
-                            @endif
-                        @endauth
+                        <div class="space-y-4">
+                            <flux:checkbox name="email_notifications" :label="__('Email notifications for certificate expiry')" checked />
+                            <flux:checkbox name="auto_renewal" :label="__('Enable automatic certificate renewal')" checked />
+                        </div>
                     </div>
-                </flux:card>
-            </div>
-        </div>
-    </flux:main>
-</x-layouts.app.sidebar>
+                </div>
+            @else
+                <div class="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+                    <div class="text-center py-8">
+                        <div class="mx-auto w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                            <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-sm font-medium text-gray-900 dark:text-white">{{ __('No SSL Subscription') }}</h3>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ __('You need an active SSL subscription to configure certificate preferences.') }}</p>
+                        <div class="mt-4">
+                            <flux:button href="{{ route('ssl.dashboard') }}" variant="primary">
+                                {{ __('Get SSL Subscription') }}
+                            </flux:button>
+                        </div>
+                    </div>
+                </div>
+            @endif
+        @endauth
+    </x-settings.layout>
+</section>
 
 <script>
 document.addEventListener('livewire:init', () => {
