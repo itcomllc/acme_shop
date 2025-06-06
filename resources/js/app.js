@@ -1,5 +1,5 @@
 import './bootstrap';
-import './theme-manager'; // シンプルなtheme-manager.jsをインポート
+//import './theme-manager'; // シンプルなtheme-manager.jsをインポート
 import '../css/app.css';
 
 // Alpine.jsの初期化（重複防止版）

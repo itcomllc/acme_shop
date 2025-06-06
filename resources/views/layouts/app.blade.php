@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" class="h-full bg-gray-50" data-theme="{{ session('theme', 'system') }}">
 
+<!-- layouts/app.php の head 部分 -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,41 +12,33 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
-    
 
-    <!-- Theme initialization script (必ずCSSより前に実行) -->
-    <script>
-        // Immediate theme application to prevent flash
-        (function() {
-            try {
-                const storedTheme = localStorage.getItem('theme') || '{{ session('theme', 'system') }}';
-                const html = document.documentElement;
-                
-                console.log('Pre-CSS theme application:', storedTheme);
-                
-                if (storedTheme === 'dark') {
-                    html.classList.add('dark');
-                } else if (storedTheme === 'light') {
-                    html.classList.add('light');
-                } else if (storedTheme === 'system') {
-                    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                        html.classList.add('dark');
-                    } else {
-                        html.classList.add('light');
-                    }
-                }
-            } catch (e) {
-                console.warn('Error in pre-CSS theme application:', e);
-            }
-        })();
-    </script>
-
-    <!-- Scripts and Styles -->
-    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/theme-manager.js'])
+    <!-- Styles -->
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
 
-<body class="h-full bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+@php
+$userTheme = 'system';
+if (Auth::check() && Auth::user()->preferences && isset(Auth::user()->preferences['theme'])) {
+    $userTheme = Auth::user()->preferences['theme'];
+} else {
+    $userTheme = session('theme', 'system');
+}
+
+$bodyClass = '';
+if ($userTheme === 'dark') {
+    $bodyClass = 'dark';
+} elseif ($userTheme === 'light') {
+    $bodyClass = 'light';
+} else {
+    // system の場合はJavaScriptに任せる
+    $bodyClass = '';
+}
+@endphp
+
+<body class="h-full bg-gray-50 dark:bg-gray-900 transition-colors duration-200 {{ $bodyClass }}" data-theme="{{ $userTheme }}">
+
     <!-- Navigation -->
     <nav class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 transition-colors duration-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -1,51 +1,14 @@
-// Simple Theme Manager - Livewire driven
-class SimpleThemeManager {
-    constructor() {
-        this.currentTheme = 'system';
-        this.isInitialized = false;
-        this.listenersSetup = false; // リスナー重複防止
-        this.init();
-    }
+// シンプルで確実なテーママネージャー
+(function() {
+    console.log('Simple Theme Manager loading...');
 
-    init() {
-        if (this.isInitialized) return;
-
-        // 初期テーマを適用
-        this.applyInitialTheme();
-        
-        // Livewireイベントリスナーを設定
-        this.setupLivewireListeners();
-        
-        // システムテーマ変更を監視
-        this.watchSystemTheme();
-        
-        this.isInitialized = true;
-        console.log('Simple Theme Manager initialized');
-    }
-
-    applyInitialTheme() {
-        try {
-            // localStorageまたはmeta tagからテーマを取得
-            let theme = localStorage.getItem('theme');
-            
-            if (!theme) {
-                const metaTheme = document.querySelector('meta[name="theme"]');
-                theme = metaTheme ? metaTheme.getAttribute('content') : 'system';
-            }
-
-            this.currentTheme = theme || 'system';
-            this.applyTheme(this.currentTheme);
-            
-        } catch (error) {
-            console.warn('Error applying initial theme:', error);
-            this.applyTheme('system');
-        }
-    }
-
-    applyTheme(theme) {
+    // テーマ適用関数
+    function applyTheme(theme) {
         try {
             const html = document.documentElement;
             const body = document.body;
+            
+            console.log('Applying theme:', theme);
             
             // 既存のテーマクラスを削除
             html.classList.remove('dark', 'light');
@@ -53,17 +16,19 @@ class SimpleThemeManager {
                 body.classList.remove('dark', 'light');
             }
             
-            // data-theme属性を更新
+            // data-theme属性を設定
             html.setAttribute('data-theme', theme);
+            if (body) {
+                body.setAttribute('data-theme', theme);
+            }
             
             let effectiveTheme;
-            
             if (theme === 'dark') {
                 html.classList.add('dark');
                 if (body) body.classList.add('dark');
                 effectiveTheme = 'dark';
             } else if (theme === 'light') {
-                html.classList.add('light');  
+                html.classList.add('light');
                 if (body) body.classList.add('light');
                 effectiveTheme = 'light';
             } else { // system
@@ -79,139 +44,158 @@ class SimpleThemeManager {
                 }
             }
             
-            this.currentTheme = theme;
-            
             // localStorageに保存
             localStorage.setItem('theme', theme);
             
             console.log(`Theme applied: ${theme} (effective: ${effectiveTheme})`);
+            console.log('HTML classes:', html.className);
+            console.log('Body classes:', body ? body.className : 'no body');
             
-            // カスタムイベントを発火
-            window.dispatchEvent(new CustomEvent('theme-applied', { 
-                detail: { theme, effectiveTheme } 
-            }));
-
+            return effectiveTheme;
+            
         } catch (error) {
             console.error('Error applying theme:', error);
         }
     }
 
-    setupLivewireListeners() {
-        // 既にリスナーが設定済みの場合はスキップ
-        if (this.listenersSetup) {
-            console.log('Livewire listeners already setup, skipping');
-            return;
+    // テーマロード関数
+    function loadTheme() {
+        try {
+            // 複数のソースからテーマを取得
+            const localTheme = localStorage.getItem('theme');
+            const bodyTheme = document.body ? document.body.dataset.theme : null;
+            const metaTheme = document.querySelector('meta[name="theme"]')?.content;
+            
+            // 優先順位: localStorage > body data > meta > system
+            const finalTheme = localTheme || bodyTheme || metaTheme || 'system';
+            
+            console.log('Loading theme sources:', {
+                localStorage: localTheme,
+                bodyData: bodyTheme,
+                meta: metaTheme,
+                final: finalTheme
+            });
+            
+            applyTheme(finalTheme);
+            return finalTheme;
+            
+        } catch (error) {
+            console.error('Error loading theme:', error);
+            applyTheme('system');
+            return 'system';
         }
-
-        // Livewireの初期化を待つ
-        const setupListeners = () => {
-            if (typeof Livewire !== 'undefined') {
-                try {
-                    // テーマ更新イベント
-                    Livewire.on('theme-updated', (event) => {
-                        const theme = Array.isArray(event) ? event[0]?.theme : event.theme;
-                        if (theme) {
-                            console.log('Received theme update from Livewire:', theme);
-                            this.applyTheme(theme);
-                        }
-                    });
-
-                    // 全体設定更新イベント
-                    Livewire.on('appearance-updated', (event) => {
-                        const data = Array.isArray(event) ? event[0] : event;
-                        if (data?.theme) {
-                            console.log('Received appearance update from Livewire:', data.theme);
-                            this.applyTheme(data.theme);
-                        }
-                    });
-
-                    this.listenersSetup = true;
-                    console.log('Livewire theme listeners setup completed');
-                } catch (error) {
-                    console.error('Error setting up Livewire listeners:', error);
-                }
-            } else {
-                // Livewireがまだ利用できない場合は少し待つ
-                setTimeout(setupListeners, 100);
-            }
-        };
-
-        // 一度だけ実行
-        setupListeners();
     }
 
-    watchSystemTheme() {
+    // サーバー同期
+    function syncWithServer(theme) {
+        if (typeof window.axios !== 'undefined') {
+            window.axios.post('/api/user/preferences', { theme }).catch(err => {
+                console.warn('Server sync failed:', err);
+            });
+        }
+    }
+
+    // 初期化
+    function init() {
+        console.log('Theme Manager initializing...');
+        
+        // 即座にテーマをロード
+        const currentTheme = loadTheme();
+        
+        // Livewireイベントリスナー
+        document.addEventListener('livewire:init', function() {
+            if (typeof Livewire !== 'undefined') {
+                Livewire.on('theme-updated', function(data) {
+                    const theme = Array.isArray(data) ? data[0]?.theme : data.theme;
+                    if (theme) {
+                        console.log('Livewire theme update:', theme);
+                        applyTheme(theme);
+                    }
+                });
+
+                Livewire.on('appearance-updated', function(data) {
+                    const eventData = Array.isArray(data) ? data[0] : data;
+                    if (eventData?.theme) {
+                        console.log('Livewire appearance update:', eventData.theme);
+                        applyTheme(eventData.theme);
+                    }
+                });
+            }
+        });
+
+        // ナビゲーションイベント
+        document.addEventListener('livewire:navigated', function() {
+            console.log('Livewire navigated - reloading theme');
+            setTimeout(loadTheme, 10);
+        });
+
+        // ページ表示イベント
+        window.addEventListener('pageshow', function() {
+            console.log('Page show - reloading theme');
+            setTimeout(loadTheme, 10);
+        });
+
+        // システムテーマ変更
         if (window.matchMedia) {
             const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-            
             const handleChange = () => {
-                if (this.currentTheme === 'system') {
-                    console.log('System color scheme changed, reapplying system theme');
-                    this.applyTheme('system');
+                const currentTheme = localStorage.getItem('theme');
+                if (!currentTheme || currentTheme === 'system') {
+                    console.log('System theme changed');
+                    applyTheme('system');
                 }
             };
 
-            // 新しいAPIを使用（古いAPIのフォールバック付き）
             if (mediaQuery.addEventListener) {
                 mediaQuery.addEventListener('change', handleChange);
             } else {
                 mediaQuery.addListener(handleChange);
             }
         }
+
+        console.log('Theme Manager initialized');
     }
 
-    // 外部から呼び出し可能なメソッド
-    setTheme(theme) {
+    // グローバル関数
+    window.setTheme = function(theme) {
         if (['light', 'dark', 'system'].includes(theme)) {
-            this.applyTheme(theme);
+            console.log('Setting theme via global function:', theme);
+            applyTheme(theme);
+            syncWithServer(theme);
             return true;
         }
         return false;
+    };
+
+    window.toggleTheme = function() {
+        const html = document.documentElement;
+        const isDark = html.classList.contains('dark');
+        const newTheme = isDark ? 'light' : 'dark';
+        window.setTheme(newTheme);
+        return newTheme;
+    };
+
+    window.getCurrentTheme = function() {
+        return localStorage.getItem('theme') || 'system';
+    };
+
+    window.reloadTheme = function() {
+        console.log('Manually reloading theme');
+        loadTheme();
+    };
+
+    // Quick toggle (layout用)
+    window.quickToggleTheme = window.toggleTheme;
+
+    // 初期化実行
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
     }
 
-    getCurrentTheme() {
-        return this.currentTheme;
-    }
+    // さらに確実にするため、少し後にも実行
+    setTimeout(init, 100);
 
-    getEffectiveTheme() {
-        if (this.currentTheme === 'system') {
-            return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        return this.currentTheme;
-    }
-}
-
-// ThemeManagerを初期化（重複防止）
-let themeManager = null;
-
-function initThemeManager() {
-    if (!themeManager && !window._themeManagerInitialized) {
-        window._themeManagerInitialized = true;
-        themeManager = new SimpleThemeManager();
-        
-        // グローバルに利用可能にする
-        window.ThemeManager = themeManager;
-        window.setTheme = (theme) => themeManager.setTheme(theme);
-        window.getCurrentTheme = () => themeManager.getCurrentTheme();
-        window.getEffectiveTheme = () => themeManager.getEffectiveTheme();
-        
-        console.log('ThemeManager initialized and attached to window');
-    } else if (themeManager) {
-        console.log('ThemeManager already initialized');
-    }
-    return themeManager;
-}
-
-// 初期化
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initThemeManager);
-} else {
-    initThemeManager();
-}
-
-console.log('Simple Theme Manager script loaded');
-
-// Export for module usage
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = SimpleThemeManager;
-}
+    console.log('Simple Theme Manager script loaded');
+})();

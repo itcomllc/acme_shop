@@ -41,6 +41,10 @@ class Appearance extends Component
                 'language' => $this->language,
                 'timezone' => $this->timezone
             ]);
+            
+            // マウント時にもテーマを確実にフロントエンドに送信
+            $this->dispatchThemeUpdate($this->theme, 'mount');
+            
         } catch (\Exception $e) {
             Log::error('Error mounting Appearance component', [
                 'error' => $e->getMessage()
@@ -56,6 +60,72 @@ class Appearance extends Component
     }
 
     /**
+     * テーマ更新のdispatch（確実にフロントエンドに送る）
+     */
+    private function dispatchThemeUpdate(string $theme, string $source = 'unknown'): void
+    {
+        try {
+            // 複数の方法でフロントエンドにテーマを送信
+            
+            // 1. Livewireイベント
+            $this->dispatch('theme-updated', theme: $theme, source: $source);
+            
+            // 2. JavaScript実行（より確実）
+            $this->js("
+                console.log('🎨 Dispatching theme from Livewire:', '$theme', '($source)');
+                
+                // テーマを直接適用
+                if (window.setTheme) {
+                    window.setTheme('$theme');
+                } else {
+                    // setTheme関数がない場合の直接適用
+                    const html = document.documentElement;
+                    const body = document.body;
+                    
+                    html.classList.remove('dark', 'light');
+                    if (body) body.classList.remove('dark', 'light');
+                    
+                    if ('$theme' === 'dark') {
+                        html.classList.add('dark');
+                        if (body) body.classList.add('dark');
+                    } else if ('$theme' === 'light') {
+                        html.classList.add('light');
+                        if (body) body.classList.add('light');
+                    } else {
+                        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                        if (prefersDark) {
+                            html.classList.add('dark');
+                            if (body) body.classList.add('dark');
+                        } else {
+                            html.classList.add('light');
+                            if (body) body.classList.add('light');
+                        }
+                    }
+                    
+                    localStorage.setItem('theme', '$theme');
+                }
+                
+                // カスタムイベントも発火
+                window.dispatchEvent(new CustomEvent('livewire-theme-updated', { 
+                    detail: { theme: '$theme', source: '$source' } 
+                }));
+            ");
+            
+            Log::info('Theme update dispatched', [
+                'theme' => $theme,
+                'source' => $source
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error dispatching theme update', [
+                'theme' => $theme,
+                'source' => $source,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
      * テーマ変更時の処理（ライブ更新）
      */
     public function updatedTheme($value): void
@@ -66,6 +136,8 @@ class Appearance extends Component
                 $this->theme = $value;
                 return;
             }
+
+            Log::info('Theme updated via live update', ['theme' => $value]);
 
             // セッションに保存
             session(['theme' => $value]);
@@ -78,10 +150,8 @@ class Appearance extends Component
                 $user->update(['preferences' => $preferences]);
             }
             
-            // フロントエンドにテーマ変更を通知
-            $this->dispatch('theme-updated', theme: $value);
-            
-            Log::info('Theme updated', ['theme' => $value]);
+            // フロントエンドに確実にテーマを送信
+            $this->dispatchThemeUpdate($value, 'live-update');
             
         } catch (\Exception $e) {
             Log::error('Error updating theme', [
@@ -143,50 +213,6 @@ class Appearance extends Component
     }
 
     /**
-     * アニメーション設定変更時の処理
-     */
-    public function updatedAnimations($value): void
-    {
-        try {
-            session(['animations' => $value]);
-            
-            $user = Auth::user();
-            if ($user) {
-                $preferences = $user->preferences ?? [];
-                $preferences['animations'] = $value;
-                $user->update(['preferences' => $preferences]);
-            }
-            
-        } catch (\Exception $e) {
-            Log::error('Error updating animations setting', [
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * 音声通知設定変更時の処理
-     */
-    public function updatedSoundNotifications($value): void
-    {
-        try {
-            session(['sound_notifications' => $value]);
-            
-            $user = Auth::user();
-            if ($user) {
-                $preferences = $user->preferences ?? [];
-                $preferences['sound_notifications'] = $value;
-                $user->update(['preferences' => $preferences]);
-            }
-            
-        } catch (\Exception $e) {
-            Log::error('Error updating sound notifications setting', [
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
      * フォーム送信処理
      */
     public function updateAppearance(): void
@@ -237,7 +263,9 @@ class Appearance extends Component
                 $user->update(['preferences' => $preferences]);
             }
 
-            // フロントエンドに全設定を通知
+            // フロントエンドに全設定を通知（最重要）
+            $this->dispatchThemeUpdate($this->theme, 'form-submit');
+            
             $this->dispatch('appearance-updated', 
                 theme: $this->theme,
                 language: $this->language,
@@ -273,6 +301,9 @@ class Appearance extends Component
             $this->animations = true;
             $this->sound_notifications = false;
 
+            // リセット後も確実にテーマを送信
+            $this->dispatchThemeUpdate($this->theme, 'reset');
+            
             $this->updateAppearance();
             
         } catch (\Exception $e) {

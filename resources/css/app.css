@@ -2,579 +2,689 @@
 @tailwind components;
 @tailwind utilities;
 
+/* CSS Variables for Theme Colors */
+:root {
+  /* Light theme colors */
+  --color-bg-primary: 255 255 255;
+  --color-bg-secondary: 249 250 251;
+  --color-bg-tertiary: 243 244 246;
+  --color-text-primary: 17 24 39;
+  --color-text-secondary: 75 85 99;
+  --color-text-tertiary: 156 163 175;
+  --color-border-primary: 229 231 235;
+  --color-border-secondary: 209 213 219;
+  --color-accent: 59 130 246;
+  --color-accent-hover: 37 99 235;
+  --color-success: 34 197 94;
+  --color-warning: 245 158 11;
+  --color-error: 239 68 68;
+}
+
+/* Dark theme colors - applied when body has 'dark' class */
+body.dark {
+  --color-bg-primary: 17 24 39;
+  --color-bg-secondary: 31 41 55;
+  --color-bg-tertiary: 55 65 81;
+  --color-text-primary: 243 244 246;
+  --color-text-secondary: 209 213 219;
+  --color-text-tertiary: 156 163 175;
+  --color-border-primary: 75 85 99;
+  --color-border-secondary: 55 65 81;
+  --color-accent: 96 165 250;
+  --color-accent-hover: 59 130 246;
+  --color-success: 74 222 128;
+  --color-warning: 251 191 36;
+  --color-error: 248 113 113;
+}
+
+/* High specificity overrides for Tailwind classes */
+@layer utilities {
+  /* Light mode explicit overrides to ensure normal colors */
+  body.light .text-gray-900,
+  body:not(.dark) .text-gray-900 {
+    color: rgb(17 24 39) !important;
+  }
+
+  body.light .text-gray-800,
+  body:not(.dark) .text-gray-800 {
+    color: rgb(31 41 55) !important;
+  }
+
+  body.light .text-gray-700,
+  body:not(.dark) .text-gray-700 {
+    color: rgb(55 65 81) !important;
+  }
+
+  body.light .text-gray-600,
+  body:not(.dark) .text-gray-600 {
+    color: rgb(75 85 99) !important;
+  }
+
+  body.light .text-gray-500,
+  body:not(.dark) .text-gray-500 {
+    color: rgb(107 114 128) !important;
+  }
+
+  body.light .text-gray-400,
+  body:not(.dark) .text-gray-400 {
+    color: rgb(156 163 175) !important;
+  }
+
+  body.light .text-black,
+  body:not(.dark) .text-black {
+    color: rgb(0 0 0) !important;
+  }
+
+  body.light .bg-white,
+  body:not(.dark) .bg-white {
+    background-color: rgb(255 255 255) !important;
+  }
+
+  body.light .bg-gray-50,
+  body:not(.dark) .bg-gray-50 {
+    background-color: rgb(249 250 251) !important;
+  }
+
+  body.light .bg-gray-100,
+  body:not(.dark) .bg-gray-100 {
+    background-color: rgb(243 244 246) !important;
+  }
+
+  body.light .bg-gray-200,
+  body:not(.dark) .bg-gray-200 {
+    background-color: rgb(229 231 235) !important;
+  }
+
+  body.light .border-gray-200,
+  body:not(.dark) .border-gray-200 {
+    border-color: rgb(229 231 235) !important;
+  }
+
+  body.light .border-gray-300,
+  body:not(.dark) .border-gray-300 {
+    border-color: rgb(209 213 219) !important;
+  }
+
+  body.light .border-gray-600,
+  body:not(.dark) .border-gray-600 {
+    border-color: rgb(75 85 99) !important;
+  }
+
+  body.light .border-gray-700,
+  body:not(.dark) .border-gray-700 {
+    border-color: rgb(55 65 81) !important;
+  }
+
+  /* Dark mode overrides with high specificity */
+  body.dark .text-gray-900,
+  body.dark .text-gray-800,
+  body.dark .text-gray-700 {
+    color: rgb(243 244 246) !important;
+  }
+
+  body.dark .text-gray-600,
+  body.dark .text-gray-500 {
+    color: rgb(209 213 219) !important;
+  }
+
+  body.dark .text-gray-400,
+  body.dark .text-gray-300 {
+    color: rgb(156 163 175) !important;
+  }
+
+  body.dark .text-black {
+    color: rgb(243 244 246) !important;
+  }
+
+  /* Background overrides */
+  body.dark .bg-white {
+    background-color: rgb(17 24 39) !important;
+  }
+
+  body.dark .bg-gray-50 {
+    background-color: rgb(31 41 55) !important;
+  }
+
+  body.dark .bg-gray-100 {
+    background-color: rgb(55 65 81) !important;
+  }
+
+  body.dark .bg-gray-200 {
+    background-color: rgb(75 85 99) !important;
+  }
+
+  body.dark .bg-gray-800 {
+    background-color: rgb(17 24 39) !important;
+  }
+
+  body.dark .bg-gray-900 {
+    background-color: rgb(0 0 0) !important;
+  }
+
+  /* Border overrides */
+  body.dark .border-gray-200 {
+    border-color: rgb(75 85 99) !important;
+  }
+
+  body.dark .border-gray-300 {
+    border-color: rgb(55 65 81) !important;
+  }
+
+  body.dark .border-gray-600 {
+    border-color: rgb(75 85 99) !important;
+  }
+
+  body.dark .border-gray-700 {
+    border-color: rgb(55 65 81) !important;
+  }
+
+  /* Light mode hover states */
+  body.light .hover\:bg-gray-50:hover,
+  body:not(.dark) .hover\:bg-gray-50:hover {
+    background-color: rgb(249 250 251) !important;
+  }
+
+  body.light .hover\:bg-gray-100:hover,
+  body:not(.dark) .hover\:bg-gray-100:hover {
+    background-color: rgb(243 244 246) !important;
+  }
+
+  body.light .hover\:bg-gray-200:hover,
+  body:not(.dark) .hover\:bg-gray-200:hover {
+    background-color: rgb(229 231 235) !important;
+  }
+
+  body.light .hover\:text-gray-700:hover,
+  body:not(.dark) .hover\:text-gray-700:hover {
+    color: rgb(55 65 81) !important;
+  }
+
+  body.light .hover\:text-gray-900:hover,
+  body:not(.dark) .hover\:text-gray-900:hover {
+    color: rgb(17 24 39) !important;
+  }
+
+  body.light .hover\:border-gray-300:hover,
+  body:not(.dark) .hover\:border-gray-300:hover {
+    border-color: rgb(209 213 219) !important;
+  }
+
+  body.light .hover\:border-gray-600:hover,
+  body:not(.dark) .hover\:border-gray-600:hover {
+    border-color: rgb(75 85 99) !important;
+  }
+
+  /* Dark mode hover states */
+  body.dark .hover\:bg-gray-50:hover {
+    background-color: rgb(55 65 81) !important;
+  }
+
+  body.dark .hover\:bg-gray-100:hover {
+    background-color: rgb(75 85 99) !important;
+  }
+
+  body.dark .hover\:bg-gray-200:hover {
+    background-color: rgb(107 114 128) !important;
+  }
+
+  body.dark .hover\:text-gray-700:hover {
+    color: rgb(243 244 246) !important;
+  }
+
+  body.dark .hover\:text-gray-900:hover {
+    color: rgb(255 255 255) !important;
+  }
+
+  body.dark .hover\:border-gray-300:hover {
+    border-color: rgb(75 85 99) !important;
+  }
+
+  body.dark .hover\:border-gray-600:hover {
+    border-color: rgb(107 114 128) !important;
+  }
+
+  /* Focus states */
+  body.dark .focus\:ring-blue-500:focus {
+    --tw-ring-color: rgb(96 165 250) !important;
+  }
+
+  body.dark .focus\:border-blue-500:focus {
+    border-color: rgb(96 165 250) !important;
+  }
+
+  /* Light mode status badges and alerts */
+  body.light .bg-green-100,
+  body:not(.dark) .bg-green-100 {
+    background-color: rgb(220 252 231) !important;
+  }
+
+  body.light .text-green-700,
+  body.light .text-green-800,
+  body:not(.dark) .text-green-700,
+  body:not(.dark) .text-green-800 {
+    color: rgb(21 128 61) !important; /* より濃い緑 */
+  }
+
+  body.light .border-green-400,
+  body:not(.dark) .border-green-400 {
+    border-color: rgb(74 222 128) !important;
+  }
+
+  body.light .bg-yellow-100,
+  body:not(.dark) .bg-yellow-100 {
+    background-color: rgb(254 249 195) !important;
+  }
+
+  body.light .text-yellow-700,
+  body.light .text-yellow-800,
+  body:not(.dark) .text-yellow-700,
+  body:not(.dark) .text-yellow-800 {
+    color: rgb(161 98 7) !important; /* より濃い黄色 */
+  }
+
+  body.light .bg-red-100,
+  body:not(.dark) .bg-red-100 {
+    background-color: rgb(254 226 226) !important;
+  }
+
+  body.light .text-red-600,
+  body.light .text-red-700,
+  body.light .text-red-800,
+  body:not(.dark) .text-red-600,
+  body:not(.dark) .text-red-700,
+  body:not(.dark) .text-red-800 {
+    color: rgb(185 28 28) !important; /* より濃い赤 */
+  }
+
+  body.light .bg-blue-100,
+  body:not(.dark) .bg-blue-100 {
+    background-color: rgb(219 234 254) !important;
+  }
+
+  body.light .text-blue-700,
+  body.light .text-blue-800,
+  body:not(.dark) .text-blue-700,
+  body:not(.dark) .text-blue-800 {
+    color: rgb(29 78 216) !important; /* より濃い青 */
+  }
+
+  body.light .bg-blue-600,
+  body:not(.dark) .bg-blue-600 {
+    background-color: rgb(37 99 235) !important;
+  }
+
+  body.light .hover\:bg-blue-700:hover,
+  body:not(.dark) .hover\:bg-blue-700:hover {
+    background-color: rgb(29 78 216) !important;
+  }
+
+  /* Dark mode status badges and alerts */
+  body.dark .bg-green-100 {
+    background-color: rgb(34 197 94 / 0.2) !important;
+  }
+
+  body.dark .text-green-700,
+  body.dark .text-green-800 {
+    color: rgb(74 222 128) !important;
+  }
+
+  body.dark .text-green-300 {
+    color: rgb(134 239 172) !important;
+  }
+
+  body.dark .border-green-700 {
+    border-color: rgb(21 128 61) !important;
+  }
+
+  body.dark .bg-green-900 {
+    background-color: rgb(20 83 45) !important;
+  }
+
+  body.dark .bg-yellow-100 {
+    background-color: rgb(245 158 11 / 0.2) !important;
+  }
+
+  body.dark .text-yellow-700,
+  body.dark .text-yellow-800 {
+    color: rgb(251 191 36) !important;
+  }
+
+  body.dark .bg-red-100 {
+    background-color: rgb(239 68 68 / 0.2) !important;
+  }
+
+  body.dark .text-red-600,
+  body.dark .text-red-700,
+  body.dark .text-red-800 {
+    color: rgb(248 113 113) !important;
+  }
+
+  body.dark .bg-blue-100 {
+    background-color: rgb(59 130 246 / 0.2) !important;
+  }
+
+  body.dark .text-blue-700,
+  body.dark .text-blue-800 {
+    color: rgb(96 165 250) !important;
+  }
+
+  body.dark .bg-blue-600 {
+    background-color: rgb(96 165 250) !important;
+  }
+
+  body.dark .hover\:bg-blue-700:hover {
+    background-color: rgb(59 130 246) !important;
+  }
+
+  /* Shadow overrides */
+  body.dark .shadow-md {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  body.dark .shadow-lg {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  body.dark .shadow-sm {
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.3) !important;
+  }
+
+  /* Ring colors */
+  body.dark .ring-black\/5 {
+    --tw-ring-color: rgb(255 255 255 / 0.1) !important;
+  }
+
+  /* Specific component overrides */
+  body.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgb(75 85 99) !important;
+  }
+
+  /* Navigation specific */
+  body.dark nav {
+    background-color: rgb(17 24 39) !important;
+    border-color: rgb(75 85 99) !important;
+  }
+
+  /* Modal and dropdown overrides */
+  body.dark .ring-1.ring-black\/5 {
+    --tw-ring-color: rgb(255 255 255 / 0.1) !important;
+  }
+
+/* Light mode input fields */
+body.light input[type="text"],
+body.light input[type="email"],
+body.light input[type="password"],
+body.light input[type="number"],
+body.light select,
+body.light textarea,
+body:not(.dark) input[type="text"],
+body:not(.dark) input[type="email"],
+body:not(.dark) input[type="password"],
+body:not(.dark) input[type="number"],
+body:not(.dark) select,
+body:not(.dark) textarea {
+  background-color: rgb(255 255 255) !important;
+  border-color: rgb(209 213 219) !important;
+  color: rgb(17 24 39) !important;
+}
+
+body.light input[type="text"]:focus,
+body.light input[type="email"]:focus,
+body.light input[type="password"]:focus,
+body.light input[type="number"]:focus,
+body.light select:focus,
+body.light textarea:focus,
+body:not(.dark) input[type="text"]:focus,
+body:not(.dark) input[type="email"]:focus,
+body:not(.dark) input[type="password"]:focus,
+body:not(.dark) input[type="number"]:focus,
+body:not(.dark) select:focus,
+body:not(.dark) textarea:focus {
+  border-color: rgb(37 99 235) !important;
+  --tw-ring-color: rgb(37 99 235 / 0.2) !important;
+}
+
+body.light select option,
+body:not(.dark) select option {
+  background-color: rgb(255 255 255) !important;
+  color: rgb(17 24 39) !important;
+}
+
+/* Dark mode input fields */
+body.dark input[type="text"],
+body.dark input[type="email"],
+body.dark input[type="password"],
+body.dark input[type="number"],
+body.dark select,
+body.dark textarea {
+  background-color: rgb(55 65 81) !important;
+  border-color: rgb(75 85 99) !important;
+  color: rgb(243 244 246) !important;
+}
+
+body.dark input[type="text"]:focus,
+body.dark input[type="email"]:focus,
+body.dark input[type="password"]:focus,
+body.dark input[type="number"]:focus,
+body.dark select:focus,
+body.dark textarea:focus {
+  border-color: rgb(96 165 250) !important;
+  --tw-ring-color: rgb(96 165 250 / 0.2) !important;
+}
+
+body.dark select option {
+  background-color: rgb(55 65 81) !important;
+  color: rgb(243 244 246) !important;
+}
+
+  /* Checkbox and radio */
+  body.dark input[type="checkbox"],
+  body.dark input[type="radio"] {
+    background-color: rgb(55 65 81) !important;
+    border-color: rgb(75 85 99) !important;
+  }
+
+  body.dark input[type="checkbox"]:checked,
+  body.dark input[type="radio"]:checked {
+    background-color: rgb(96 165 250) !important;
+    border-color: rgb(96 165 250) !important;
+  }
+}
+
+/* Additional components that need specific overrides */
 @layer components {
-  /* Base Button Styles */
-  .btn-primary {
-    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors;
+  /* Primary buttons - 常に白いテキスト */
+  .btn-primary,
+  .bg-blue-600,
+  .bg-blue-700 {
+    color: rgb(255 255 255) !important;
   }
 
-  .btn-secondary {
-    @apply bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium py-2 px-4 rounded-lg transition-colors;
+  .btn-primary:hover,
+  .hover\:bg-blue-700:hover {
+    color: rgb(255 255 255) !important;
   }
 
-  .btn-danger {
-    @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors;
+  /* Secondary buttons */
+  body.light .btn-secondary,
+  body:not(.dark) .btn-secondary {
+    background-color: rgb(243 244 246) !important;
+    color: rgb(55 65 81) !important;
+    border-color: rgb(209 213 219) !important;
   }
 
-  .btn-success {
-    @apply bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors;
+  body.light .btn-secondary:hover,
+  body:not(.dark) .btn-secondary:hover {
+    background-color: rgb(229 231 235) !important;
   }
 
-  .btn-outline {
-    @apply border border-gray-300 hover:border-gray-400 text-gray-700 hover:text-gray-900 font-medium py-2 px-4 rounded-lg transition-colors;
+  body.dark .btn-secondary {
+    background-color: rgb(55 65 81) !important;
+    color: rgb(243 244 246) !important;
+    border-color: rgb(75 85 99) !important;
   }
 
-  /* Card Components */
-  .card {
-    @apply bg-white rounded-lg shadow-md overflow-hidden;
+  body.dark .btn-secondary:hover {
+    background-color: rgb(75 85 99) !important;
   }
 
-  .card-dark {
-    @apply bg-gray-800 rounded-lg shadow-md overflow-hidden;
+  /* Cards */
+  body.light .card,
+  body:not(.dark) .card {
+    background-color: rgb(255 255 255) !important;
+    border-color: rgb(229 231 235) !important;
   }
 
-  .card-header {
-    @apply px-6 py-4 border-b border-gray-200 bg-gray-50;
+  body.dark .card {
+    background-color: rgb(17 24 39) !important;
+    border-color: rgb(75 85 99) !important;
   }
 
-  .card-header-dark {
-    @apply px-6 py-4 border-b border-gray-700 bg-gray-900;
+  /* Tables */
+  body.light table,
+  body:not(.dark) table {
+    background-color: rgb(255 255 255) !important;
   }
 
-  .card-body {
-    @apply px-6 py-4;
+  body.light th,
+  body:not(.dark) th {
+    background-color: rgb(249 250 251) !important;
+    color: rgb(107 114 128) !important;
   }
 
-  .card-footer {
-    @apply px-6 py-4 border-t border-gray-200 bg-gray-50;
+  body.light td,
+  body:not(.dark) td {
+    color: rgb(17 24 39) !important;
+    border-color: rgb(229 231 235) !important;
   }
 
-  /* SSL Certificate Status Badges */
-  .status-badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  body.light tbody tr:hover,
+  body:not(.dark) tbody tr:hover {
+    background-color: rgb(249 250 251) !important;
   }
 
-  .status-badge-issued {
-    @apply bg-green-100 text-green-800;
+  body.dark table {
+    background-color: rgb(17 24 39) !important;
   }
 
-  .status-badge-pending {
-    @apply bg-yellow-100 text-yellow-800;
+  body.dark th {
+    background-color: rgb(31 41 55) !important;
+    color: rgb(156 163 175) !important;
   }
 
-  .status-badge-processing {
-    @apply bg-blue-100 text-blue-800;
+  body.dark td {
+    color: rgb(243 244 246) !important;
+    border-color: rgb(75 85 99) !important;
   }
 
-  .status-badge-failed {
-    @apply bg-red-100 text-red-800;
+  body.dark tbody tr:hover {
+    background-color: rgb(31 41 55) !important;
   }
 
-  .status-badge-revoked {
-    @apply bg-gray-100 text-gray-800;
-  }
-
-  .status-badge-expired {
-    @apply bg-orange-100 text-orange-800;
-  }
-
-  .status-badge-replaced {
-    @apply bg-gray-100 text-gray-600;
-  }
-
-  .status-badge-suspended {
-    @apply bg-purple-100 text-purple-800;
-  }
-
-  /* Subscription Status Badges */
-  .subscription-badge-active {
-    @apply bg-green-100 text-green-800;
-  }
-
-  .subscription-badge-past-due {
-    @apply bg-yellow-100 text-yellow-800;
-  }
-
-  .subscription-badge-cancelled {
-    @apply bg-red-100 text-red-800;
-  }
-
-  .subscription-badge-suspended {
-    @apply bg-orange-100 text-orange-800;
-  }
-
-  .subscription-badge-paused {
-    @apply bg-blue-100 text-blue-800;
-  }
-
-  /* Provider Badges */
-  .provider-badge-gogetssl {
-    @apply bg-blue-100 text-blue-800;
-  }
-
-  .provider-badge-google {
-    @apply bg-red-100 text-red-800;
-  }
-
-  .provider-badge-lets-encrypt {
-    @apply bg-green-100 text-green-800;
-  }
-
-  /* Form Components */
-  .form-input {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
-  }
-
-  .form-input-error {
-    @apply border-red-300 focus:ring-red-500 focus:border-red-500;
-  }
-
-  .form-label {
-    @apply block text-sm font-medium text-gray-700 mb-1;
-  }
-
-  .form-error {
-    @apply text-sm text-red-600 mt-1;
-  }
-
-  .form-help {
-    @apply text-sm text-gray-500 mt-1;
-  }
-
-  /* Modal Components */
-  .modal-overlay {
-    @apply fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50;
-  }
-
-  .modal-container {
-    @apply relative mx-auto p-5 border w-11/12 md:w-2/3 lg:w-1/2 shadow-lg rounded-md bg-white;
-  }
-
-  .modal-header {
-    @apply flex items-center justify-between pb-4 border-b border-gray-200;
-  }
-
-  .modal-title {
-    @apply text-lg font-semibold text-gray-900;
-  }
-
-  .modal-close {
-    @apply text-gray-400 hover:text-gray-600 cursor-pointer;
-  }
-
-  .modal-body {
-    @apply py-4;
-  }
-
-  .modal-footer {
-    @apply flex justify-end space-x-2 pt-4 border-t border-gray-200;
-  }
-
-  /* Notification Components */
+  /* Notifications */
   .notification {
-    @apply fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-300;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
   }
 
-  .notification-success {
-    @apply bg-green-500 text-white;
-  }
-
-  .notification-error {
-    @apply bg-red-500 text-white;
-  }
-
-  .notification-warning {
-    @apply bg-yellow-500 text-white;
-  }
-
-  .notification-info {
-    @apply bg-blue-500 text-white;
-  }
-
-  /* SSL Dashboard Specific Styles */
-  .ssl-dashboard-header {
-    @apply bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-lg p-6 mb-6;
-  }
-
-  .ssl-stats-grid {
-    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6;
-  }
-
-  .ssl-stat-card {
-    @apply bg-white rounded-lg shadow-md p-6 flex items-center;
-  }
-
-  .ssl-stat-icon {
-    @apply p-3 rounded-lg mr-4;
-  }
-
-  .ssl-stat-icon-blue {
-    @apply bg-blue-100 text-blue-600;
-  }
-
-  .ssl-stat-icon-green {
-    @apply bg-green-100 text-green-600;
-  }
-
-  .ssl-stat-icon-yellow {
-    @apply bg-yellow-100 text-yellow-600;
-  }
-
-  .ssl-stat-icon-red {
-    @apply bg-red-100 text-red-600;
-  }
-
-  .ssl-stat-value {
-    @apply text-2xl font-bold text-gray-900;
-  }
-
-  .ssl-stat-label {
-    @apply text-sm font-medium text-gray-600;
-  }
-
-  /* Certificate Table Styles */
-  .cert-table {
-    @apply min-w-full divide-y divide-gray-200;
-  }
-
-  .cert-table-header {
-    @apply bg-gray-50;
-  }
-
-  .cert-table-header-cell {
-    @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
-  }
-
-  .cert-table-row {
-    @apply hover:bg-gray-50 transition-colors;
-  }
-
-  .cert-table-cell {
-    @apply px-6 py-4 whitespace-nowrap text-sm;
-  }
-
-  .cert-table-cell-primary {
-    @apply text-gray-900 font-medium;
-  }
-
-  .cert-table-cell-secondary {
-    @apply text-gray-600;
-  }
-
-  /* Progress Bars */
-  .progress-bar {
-    @apply w-full bg-gray-200 rounded-full h-2;
-  }
-
-  .progress-bar-fill {
-    @apply h-2 rounded-full transition-all duration-300;
-  }
-
-  .progress-bar-blue {
-    @apply bg-blue-600;
-  }
-
-  .progress-bar-green {
-    @apply bg-green-600;
-  }
-
-  .progress-bar-yellow {
-    @apply bg-yellow-600;
-  }
-
-  .progress-bar-red {
-    @apply bg-red-600;
-  }
-
-  /* Loading Spinner */
-  .spinner {
-    @apply animate-spin rounded-full border-b-2 border-current;
-  }
-
-  .spinner-sm {
-    @apply h-4 w-4;
-  }
-
-  .spinner-md {
-    @apply h-6 w-6;
-  }
-
-  .spinner-lg {
-    @apply h-8 w-8;
-  }
-
-  .spinner-xl {
-    @apply h-12 w-12;
-  }
-
-  /* Validation Instructions */
-  .validation-step {
-    @apply bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4;
-  }
-
-  .validation-step-header {
-    @apply font-medium text-gray-900 mb-2;
-  }
-
-  .validation-step-description {
-    @apply text-sm text-gray-600 mb-3;
-  }
-
-  .validation-code-block {
-    @apply bg-gray-900 text-gray-100 p-3 rounded font-mono text-sm overflow-x-auto;
-  }
-
-  .validation-dns-record {
-    @apply bg-blue-50 border border-blue-200 rounded p-3 font-mono text-sm;
-  }
-
-  /* Subscription Plan Cards */
-  .plan-card {
-    @apply border border-gray-200 rounded-lg p-6 hover:border-blue-500 hover:shadow-lg transition-all duration-200 cursor-pointer;
-  }
-
-  .plan-card-selected {
-    @apply border-blue-500 ring-2 ring-blue-200 bg-blue-50;
-  }
-
-  .plan-card-header {
-    @apply text-center mb-4;
-  }
-
-  .plan-card-title {
-    @apply text-xl font-semibold text-gray-900;
-  }
-
-  .plan-card-price {
-    @apply text-3xl font-bold text-blue-600 mt-2;
-  }
-
-  .plan-card-features {
-    @apply space-y-2 mb-6;
-  }
-
-  .plan-card-feature {
-    @apply flex items-center text-sm text-gray-600;
-  }
-
-  .plan-card-feature-icon {
-    @apply h-4 w-4 text-green-500 mr-2 flex-shrink-0;
-  }
-
-  /* Admin Dashboard Styles */
-  .admin-nav {
-    @apply bg-gray-800 text-white;
-  }
-
-  .admin-nav-item {
-    @apply block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors;
-  }
-
-  .admin-nav-item-active {
-    @apply bg-gray-900 text-white;
-  }
-
-  .admin-stat-card {
-    @apply bg-white overflow-hidden shadow rounded-lg;
-  }
-
-  .admin-stat-card-body {
-    @apply p-5;
-  }
-
-  .admin-stat-card-icon {
-    @apply w-8 h-8 text-gray-400;
-  }
-
-  .admin-stat-card-value {
-    @apply mt-1 text-3xl font-semibold text-gray-900;
-  }
-
-  .admin-stat-card-label {
-    @apply text-sm font-medium text-gray-500 truncate;
-  }
-
-  /* Health Check Status */
-  .health-status-healthy {
-    @apply text-green-600;
-  }
-
-  .health-status-warning {
-    @apply text-yellow-600;
-  }
-
-  .health-status-critical {
-    @apply text-red-600;
-  }
-
-  .health-status-unknown {
-    @apply text-gray-600;
-  }
-
-  /* Provider Health Indicators */
-  .provider-health-dot {
-    @apply inline-block w-3 h-3 rounded-full mr-2;
-  }
-
-  .provider-health-connected {
-    @apply bg-green-500;
-  }
-
-  .provider-health-failed {
-    @apply bg-red-500;
-  }
-
-  .provider-health-warning {
-    @apply bg-yellow-500;
-  }
-
-  .provider-health-unknown {
-    @apply bg-gray-500;
-  }
-
-  /* Responsive Table Wrapper */
-  .table-responsive {
-    @apply overflow-x-auto shadow ring-1 ring-black ring-opacity-5 rounded-lg;
-  }
-
-  /* Dark Mode Support */
-  .dark .card {
-    @apply bg-gray-800 text-gray-100;
-  }
-
-  .dark .card-header {
-    @apply bg-gray-900 border-gray-700;
-  }
-
-  .dark .form-input {
-    @apply bg-gray-700 border-gray-600 text-gray-100 focus:ring-blue-400 focus:border-blue-400;
-  }
-
-  .dark .cert-table-header {
-    @apply bg-gray-900;
-  }
-
-  .dark .cert-table-row:hover {
-    @apply bg-gray-700;
-  }
-
-  .dark .validation-step {
-    @apply bg-gray-700 border-gray-600;
-  }
-
-  .dark .validation-code-block {
-    @apply bg-gray-800 text-gray-200;
-  }
-
-  /* Animation Classes */
-  .fade-in {
-    animation: fadeIn 0.3s ease-in-out;
-  }
-
-  .slide-up {
-    animation: slideUp 0.3s ease-out;
-  }
-
-  .pulse-slow {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  /* Custom Scrollbar */
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    @apply bg-gray-100 rounded;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-gray-400 rounded hover:bg-gray-500;
-  }
-
-  /* Print Styles */
-  @media print {
-    .no-print {
-      display: none !important;
-    }
-    
-    .print-break-before {
-      page-break-before: always;
-    }
-    
-    .print-break-after {
-      page-break-after: always;
-    }
+  body.dark .notification {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2) !important;
   }
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+/* Base element styling with proper specificity */
+body.light,
+body:not(.dark) {
+  background-color: rgb(249 250 251) !important;
+  color: rgb(17 24 39) !important;
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(10px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+body.dark {
+  background-color: rgb(31 41 55) !important;
+  color: rgb(243 244 246) !important;
 }
 
-/* Certificate Status Color Indicators */
-@layer utilities {
-  .cert-status-dot {
-    @apply inline-block w-2 h-2 rounded-full mr-2;
-  }
-  
-  .cert-status-dot-issued {
-    @apply bg-green-500;
-  }
-  
-  .cert-status-dot-pending {
-    @apply bg-yellow-500;
-  }
-  
-  .cert-status-dot-processing {
-    @apply bg-blue-500;
-  }
-  
-  .cert-status-dot-failed {
-    @apply bg-red-500;
-  }
-  
-  .cert-status-dot-revoked {
-    @apply bg-gray-500;
-  }
-  
-  .cert-status-dot-expired {
-    @apply bg-orange-500;
-  }
+body.light h1,
+body.light h2,
+body.light h3,
+body.light h4,
+body.light h5,
+body.light h6,
+body:not(.dark) h1,
+body:not(.dark) h2,
+body:not(.dark) h3,
+body:not(.dark) h4,
+body:not(.dark) h5,
+body:not(.dark) h6 {
+  color: rgb(17 24 39) !important;
 }
 
-/* SSL Platform Specific Utilities */
-@layer utilities {
-  .text-ssl-primary {
-    @apply text-blue-600;
-  }
-  
-  .bg-ssl-primary {
-    @apply bg-blue-600;
-  }
-  
-  .border-ssl-primary {
-    @apply border-blue-600;
-  }
-  
-  .ring-ssl-primary {
-    @apply ring-blue-600;
-  }
+body.dark h1,
+body.dark h2,
+body.dark h3,
+body.dark h4,
+body.dark h5,
+body.dark h6 {
+  color: rgb(243 244 246) !important;
+}
+
+body.light p,
+body:not(.dark) p {
+  color: rgb(17 24 39) !important;
+}
+
+body.dark p {
+  color: rgb(243 244 246) !important;
+}
+
+/* ボタン内のテキストは白色を維持 */
+body.light .bg-blue-600,
+body.light .bg-blue-700,
+body.light .hover\:bg-blue-700,
+body:not(.dark) .bg-blue-600,
+body:not(.dark) .bg-blue-700,
+body:not(.dark) .hover\:bg-blue-700 {
+  color: rgb(255 255 255) !important;
+}
+
+body.dark .bg-blue-600,
+body.dark .bg-blue-700,
+body.dark .hover\:bg-blue-700 {
+  color: rgb(255 255 255) !important;
+}
+
+/* ボタン以外のリンクの色設定 */
+body.light a:not(.bg-blue-600):not(.bg-blue-700):not(.btn-primary),
+body:not(.dark) a:not(.bg-blue-600):not(.bg-blue-700):not(.btn-primary) {
+  color: rgb(37 99 235) !important;
+}
+
+body.light a:not(.bg-blue-600):not(.bg-blue-700):not(.btn-primary):hover,
+body:not(.dark) a:not(.bg-blue-600):not(.bg-blue-700):not(.btn-primary):hover {
+  color: rgb(29 78 216) !important;
+}
+
+body.dark a:not(.bg-blue-600):not(.bg-blue-700):not(.btn-primary) {
+  color: rgb(96 165 250) !important;
+}
+
+body.dark a:not(.bg-blue-600):not(.bg-blue-700):not(.btn-primary):hover {
+  color: rgb(59 130 246) !important;
+}
+
+/* Scrollbar for dark mode */
+body.dark ::-webkit-scrollbar-track {
+  background-color: rgb(55 65 81) !important;
+}
+
+body.dark ::-webkit-scrollbar-thumb {
+  background-color: rgb(75 85 99) !important;
+}
+
+body.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(107 114 128) !important;
+}
+
+/* Transitions for smooth theme switching */
+* {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease !important;
 }
