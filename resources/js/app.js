@@ -1,5 +1,6 @@
 import './bootstrap';
 import '../css/app.css';
+import './theme-manager.js';
 
 // Alpine.js for simple interactions (optional)
 import Alpine from 'alpinejs';
