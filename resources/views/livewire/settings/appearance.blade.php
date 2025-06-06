@@ -49,151 +49,138 @@ new class extends Component
     }
 }; ?>
 
-<x-layouts.app.sidebar title="Appearance Settings">
-    <flux:main>
-        <div class="space-y-6">
-            @include('partials.settings-heading')
+<section class="w-full">
+    @include('partials.settings-heading')
 
-            <div class="max-w-2xl">
-                <flux:card>
-                    <flux:card.header>
-                        <flux:heading size="lg">{{ __('Appearance') }}</flux:heading>
-                        <flux:subheading>{{ __('Customize the look and feel of your SSL SaaS Platform experience.') }}</flux:subheading>
-                    </flux:card.header>
+    <x-settings.layout :heading="__('Appearance')" :subheading="__('Customize the look and feel of your SSL SaaS Platform experience.')">
+        <form wire:submit="updateAppearance" class="my-6 w-full space-y-6">
+            <!-- Theme Selection -->
+            <div>
+                <flux:label>{{ __('Theme') }}</flux:label>
+                <div class="mt-2 grid grid-cols-3 gap-4">
+                    <label class="flex flex-col items-center p-4 border rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer">
+                        <input type="radio" wire:model.live="theme" value="light" class="sr-only">
+                        <flux:icon.sun class="h-8 w-8 mb-2 text-yellow-500" />
+                        <span class="text-sm font-medium">{{ __('Light') }}</span>
+                    </label>
+                    
+                    <label class="flex flex-col items-center p-4 border rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer">
+                        <input type="radio" wire:model.live="theme" value="dark" class="sr-only">
+                        <flux:icon.moon class="h-8 w-8 mb-2 text-zinc-600" />
+                        <span class="text-sm font-medium">{{ __('Dark') }}</span>
+                    </label>
+                    
+                    <label class="flex flex-col items-center p-4 border rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 cursor-pointer">
+                        <input type="radio" wire:model.live="theme" value="system" class="sr-only">
+                        <flux:icon.computer-desktop class="h-8 w-8 mb-2 text-zinc-500" />
+                        <span class="text-sm font-medium">{{ __('System') }}</span>
+                    </label>
+                </div>
+                <flux:description>{{ __('Choose your preferred theme. System will match your device settings.') }}</flux:description>
+            </div>
 
-                    <form wire:submit="updateAppearance" class="space-y-6">
-                        <!-- Theme Selection -->
-                        <flux:field>
-                            <flux:label>{{ __('Theme') }}</flux:label>
-                            <flux:radio.group wire:model.live="theme" name="theme" class="grid grid-cols-3 gap-4">
-                                <flux:radio value="light" class="flex flex-col items-center p-4 border rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                                    <flux:icon.sun class="h-8 w-8 mb-2 text-yellow-500" />
-                                    <span class="text-sm font-medium">{{ __('Light') }}</span>
-                                </flux:radio>
-                                
-                                <flux:radio value="dark" class="flex flex-col items-center p-4 border rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                                    <flux:icon.moon class="h-8 w-8 mb-2 text-zinc-600" />
-                                    <span class="text-sm font-medium">{{ __('Dark') }}</span>
-                                </flux:radio>
-                                
-                                <flux:radio value="system" class="flex flex-col items-center p-4 border rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800">
-                                    <flux:icon.computer-desktop class="h-8 w-8 mb-2 text-zinc-500" />
-                                    <span class="text-sm font-medium">{{ __('System') }}</span>
-                                </flux:radio>
-                            </flux:radio.group>
-                            <flux:description>{{ __('Choose your preferred theme. System will match your device settings.') }}</flux:description>
-                        </flux:field>
+            <!-- Language Selection -->
+            <div>
+                <flux:label>{{ __('Language') }}</flux:label>
+                <flux:select wire:model="language" name="language" class="mt-2">
+                    <option value="en">English</option>
+                    <option value="ja">日本語 (Japanese)</option>
+                    <option value="es">Español (Spanish)</option>
+                    <option value="fr">Français (French)</option>
+                    <option value="de">Deutsch (German)</option>
+                    <option value="zh">中文 (Chinese)</option>
+                </flux:select>
+                <flux:description>{{ __('Select your preferred language for the interface.') }}</flux:description>
+            </div>
 
-                        <!-- Language Selection -->
-                        <flux:field>
-                            <flux:label>{{ __('Language') }}</flux:label>
-                            <flux:select wire:model="language" name="language">
-                                <option value="en">English</option>
-                                <option value="ja">日本語 (Japanese)</option>
-                                <option value="es">Español (Spanish)</option>
-                                <option value="fr">Français (French)</option>
-                                <option value="de">Deutsch (German)</option>
-                                <option value="zh">中文 (Chinese)</option>
-                            </flux:select>
-                            <flux:description>{{ __('Select your preferred language for the interface.') }}</flux:description>
-                        </flux:field>
+            <!-- Timezone Selection -->
+            <div>
+                <flux:label>{{ __('Timezone') }}</flux:label>
+                <flux:select wire:model="timezone" name="timezone" class="mt-2">
+                    <option value="UTC">UTC</option>
+                    <option value="America/New_York">Eastern Time (US)</option>
+                    <option value="America/Chicago">Central Time (US)</option>
+                    <option value="America/Denver">Mountain Time (US)</option>
+                    <option value="America/Los_Angeles">Pacific Time (US)</option>
+                    <option value="Europe/London">London</option>
+                    <option value="Europe/Paris">Paris</option>
+                    <option value="Europe/Berlin">Berlin</option>
+                    <option value="Asia/Tokyo">Tokyo</option>
+                    <option value="Asia/Shanghai">Shanghai</option>
+                    <option value="Asia/Seoul">Seoul</option>
+                    <option value="Australia/Sydney">Sydney</option>
+                </flux:select>
+                <flux:description>{{ __('Your timezone affects how dates and times are displayed.') }}</flux:description>
+            </div>
 
-                        <!-- Timezone Selection -->
-                        <flux:field>
-                            <flux:label>{{ __('Timezone') }}</flux:label>
-                            <flux:select wire:model="timezone" name="timezone">
-                                <option value="UTC">UTC</option>
-                                <option value="America/New_York">Eastern Time (US)</option>
-                                <option value="America/Chicago">Central Time (US)</option>
-                                <option value="America/Denver">Mountain Time (US)</option>
-                                <option value="America/Los_Angeles">Pacific Time (US)</option>
-                                <option value="Europe/London">London</option>
-                                <option value="Europe/Paris">Paris</option>
-                                <option value="Europe/Berlin">Berlin</option>
-                                <option value="Asia/Tokyo">Tokyo</option>
-                                <option value="Asia/Shanghai">Shanghai</option>
-                                <option value="Asia/Seoul">Seoul</option>
-                                <option value="Australia/Sydney">Sydney</option>
-                            </flux:select>
-                            <flux:description>{{ __('Your timezone affects how dates and times are displayed.') }}</flux:description>
-                        </flux:field>
-
-                        <!-- Animation Preferences -->
-                        <div class="space-y-4">
-                            <flux:heading size="md">{{ __('Interface Preferences') }}</flux:heading>
-                            
-                            <flux:field>
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <flux:label>{{ __('Enable Animations') }}</flux:label>
-                                        <flux:description>{{ __('Show smooth transitions and animations throughout the interface.') }}</flux:description>
-                                    </div>
-                                    <flux:switch wire:model="animations" name="animations" />
-                                </div>
-                            </flux:field>
-
-                            <flux:field>
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <flux:label>{{ __('Sound Notifications') }}</flux:label>
-                                        <flux:description>{{ __('Play sounds for important notifications and alerts.') }}</flux:description>
-                                    </div>
-                                    <flux:switch wire:model="sound_notifications" name="sound_notifications" />
-                                </div>
-                            </flux:field>
-                        </div>
-
-                        <div class="flex items-center justify-between pt-4 border-t">
-                            <flux:button type="button" wire:click="resetToDefaults" variant="ghost">
-                                {{ __('Reset to Defaults') }}
-                            </flux:button>
-                            
-                            <div class="flex space-x-3">
-                                <flux:link href="{{ route('settings.profile') }}" variant="ghost">
-                                    {{ __('Back to Profile') }}
-                                </flux:link>
-                                <flux:button type="submit" variant="primary">
-                                    {{ __('Save Changes') }}
-                                </flux:button>
-                            </div>
-                        </div>
-                    </form>
-                </flux:card>
-
-                <!-- Preview Section -->
-                <flux:card class="mt-6">
-                    <flux:card.header>
-                        <flux:heading size="lg">{{ __('Preview') }}</flux:heading>
-                        <flux:subheading>{{ __('See how your settings will look in the SSL dashboard.') }}</flux:subheading>
-                    </flux:card.header>
-
-                    <div class="space-y-4">
-                        <!-- Sample SSL Certificate Card -->
-                        <div class="border rounded-lg p-4 {{ $theme === 'dark' ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200' }}">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h3 class="font-medium {{ $theme === 'dark' ? 'text-white' : 'text-zinc-900' }}">
-                                        example.com
-                                    </h3>
-                                    <p class="text-sm {{ $theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600' }}">
-                                        DV Certificate • GoGetSSL
-                                    </p>
-                                </div>
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    Active
-                                </span>
-                            </div>
-                        </div>
-
-                        <p class="text-sm {{ $theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600' }}">
-                            {{ __('This is how certificate cards will appear with your current theme selection.') }}
-                        </p>
+            <!-- Animation Preferences -->
+            <div class="space-y-4">
+                <flux:heading size="md">{{ __('Interface Preferences') }}</flux:heading>
+                
+                <div class="flex items-center justify-between">
+                    <div>
+                        <flux:label>{{ __('Enable Animations') }}</flux:label>
+                        <flux:description>{{ __('Show smooth transitions and animations throughout the interface.') }}</flux:description>
                     </div>
-                </flux:card>
+                    <flux:switch wire:model="animations" name="animations" />
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <div>
+                        <flux:label>{{ __('Sound Notifications') }}</flux:label>
+                        <flux:description>{{ __('Play sounds for important notifications and alerts.') }}</flux:description>
+                    </div>
+                    <flux:switch wire:model="sound_notifications" name="sound_notifications" />
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-4 border-t">
+                <flux:button type="button" wire:click="resetToDefaults" variant="ghost">
+                    {{ __('Reset to Defaults') }}
+                </flux:button>
+                
+                <div class="flex items-center gap-4">
+                    <flux:button variant="primary" type="submit">{{ __('Save Changes') }}</flux:button>
+                    
+                    <x-action-message class="me-3" on="appearance-updated">
+                        {{ __('Saved.') }}
+                    </x-action-message>
+                </div>
+            </div>
+        </form>
+
+        <!-- Preview Section -->
+        <div class="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+            <div class="mb-6">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">{{ __('Preview') }}</h3>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ __('See how your settings will look in the SSL dashboard.') }}</p>
+            </div>
+
+            <div class="space-y-4">
+                <!-- Sample SSL Certificate Card -->
+                <div class="border rounded-lg p-4 {{ $theme === 'dark' ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200' }}">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="font-medium {{ $theme === 'dark' ? 'text-white' : 'text-zinc-900' }}">
+                                example.com
+                            </h3>
+                            <p class="text-sm {{ $theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600' }}">
+                                DV Certificate • GoGetSSL
+                            </p>
+                        </div>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Active
+                        </span>
+                    </div>
+                </div>
+
+                <p class="text-sm {{ $theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600' }}">
+                    {{ __('This is how certificate cards will appear with your current theme selection.') }}
+                </p>
             </div>
         </div>
-    </flux:main>
-</x-layouts.app.sidebar>
+    </x-settings.layout>
+</section>
 
 <script>
 document.addEventListener('livewire:init', () => {
