@@ -47,23 +47,45 @@ if (pusherAppKey && pusherAppKey !== '' && pusherAppKey !== 'your-pusher-key') {
 } else {
     console.log('Pusher not configured - real-time features disabled');
     
-    // Pusherなしでのフォールバック実装
+    // Pusherなしでの完全なフォールバック実装（Livewireエラーを回避）
     window.Echo = {
         channel: () => ({
             listen: () => {},
-            stopListening: () => {}
+            stopListening: () => {},
+            whisper: () => {},
+            stopWhispering: () => {}
         }),
         private: () => ({
             listen: () => {},
-            stopListening: () => {}
+            stopListening: () => {},
+            whisper: () => {},
+            stopWhispering: () => {}
         }),
         join: () => ({
             listen: () => {},
             stopListening: () => {},
             here: () => {},
             joining: () => {},
-            leaving: () => {}
+            leaving: () => {},
+            whisper: () => {},
+            stopWhispering: () => {}
         }),
-        disconnect: () => {}
+        disconnect: () => {},
+        // Livewireが期待するsocketIdメソッドを追加
+        socketId: () => null,
+        // その他のLivewireが期待する可能性があるメソッド
+        connector: {
+            socket: {
+                id: null
+            }
+        }
     };
+    
+    // Echoのsocket情報を模擬
+    Object.defineProperty(window.Echo, 'socketId', {
+        value: () => null,
+        writable: false,
+        enumerable: true,
+        configurable: false
+    });
 }

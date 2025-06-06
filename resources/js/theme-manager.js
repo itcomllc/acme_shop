@@ -5,22 +5,43 @@ class ThemeManager {
         this.isInitialized = false;
         this.pendingCallbacks = [];
         this.observers = [];
+        this.initPromise = null;
         this.init();
     }
 
     init() {
-        // 即座にテーマを適用（ページ読み込み前）
-        this.applyStoredThemeImmediately();
-        
-        // DOMContentLoadedでも再度確認
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this.completeInitialization());
-        } else {
-            this.completeInitialization();
+        // 重複初期化を防ぐ
+        if (this.initPromise) {
+            return this.initPromise;
         }
+
+        this.initPromise = new Promise((resolve) => {
+            // 即座にテーマを適用（ページ読み込み前）
+            this.applyStoredThemeImmediately();
+            
+            // DOMContentLoadedでも再度確認
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    this.completeInitialization();
+                    resolve();
+                });
+            } else {
+                // 少し遅延を入れて他のスクリプトの読み込みを待つ
+                setTimeout(() => {
+                    this.completeInitialization();
+                    resolve();
+                }, 50);
+            }
+        });
+
+        return this.initPromise;
     }
 
     completeInitialization() {
+        if (this.isInitialized) {
+            return;
+        }
+
         this.applyStoredTheme();
         this.watchSystemTheme();
         this.setupLivewireListeners();
@@ -316,17 +337,28 @@ class ThemeManager {
         this.applyThemeToDOM(this.currentTheme);
     }
 
-    // 初期化完了を待つ
+    // 初期化完了を待つ（Promiseベース）
     whenReady(callback) {
-        if (this.isInitialized) {
-            try {
-                callback();
-            } catch (error) {
-                console.warn('Error in theme ready callback:', error);
+        if (callback && typeof callback === 'function') {
+            if (this.isInitialized) {
+                try {
+                    callback();
+                } catch (error) {
+                    console.warn('Error in theme ready callback:', error);
+                }
+            } else if (this.initPromise) {
+                this.initPromise.then(() => {
+                    try {
+                        callback();
+                    } catch (error) {
+                        console.warn('Error in theme ready callback:', error);
+                    }
+                });
+            } else {
+                this.pendingCallbacks.push(callback);
             }
-        } else {
-            this.pendingCallbacks.push(callback);
         }
+        return this.initPromise;
     }
 
     // クリーンアップ
@@ -334,6 +366,8 @@ class ThemeManager {
         this.observers = [];
         this.pendingCallbacks = [];
         this._livewireListenersSetup = false;
+        this.isInitialized = false;
+        this.initPromise = null;
     }
 }
 
@@ -342,6 +376,7 @@ let themeManagerInstance = null;
 
 function initializeThemeManager() {
     if (!themeManagerInstance) {
+        console.log('Initializing ThemeManager...');
         themeManagerInstance = new ThemeManager();
         
         // グローバルに利用可能にする
@@ -352,6 +387,7 @@ function initializeThemeManager() {
             try {
                 if (window.ThemeManager) {
                     window.ThemeManager.setTheme(theme);
+                    return true;
                 } else {
                     console.warn('ThemeManager not available, queuing theme setting');
                     // ThemeManagerが利用可能になるまで待機
@@ -360,9 +396,11 @@ function initializeThemeManager() {
                             window.ThemeManager.setTheme(theme);
                         }
                     }, 100);
+                    return false;
                 }
             } catch (error) {
                 console.error('Error setting theme:', error);
+                return false;
             }
         };
         
@@ -389,28 +427,38 @@ function initializeThemeManager() {
             try {
                 if (window.ThemeManager) {
                     window.ThemeManager.forceReapply();
+                    return true;
                 }
+                return false;
             } catch (error) {
                 console.error('Error force reapplying theme:', error);
+                return false;
             }
         };
 
-        // 初期化完了を待つヘルパー
+        // 初期化完了を待つヘルパー（Promiseベース）
         window.whenThemeReady = (callback) => {
             try {
                 if (window.ThemeManager) {
-                    window.ThemeManager.whenReady(callback);
+                    return window.ThemeManager.whenReady(callback);
                 } else {
-                    setTimeout(() => {
-                        if (window.ThemeManager) {
-                            window.ThemeManager.whenReady(callback);
-                        }
-                    }, 100);
+                    return new Promise((resolve) => {
+                        setTimeout(() => {
+                            if (window.ThemeManager) {
+                                window.ThemeManager.whenReady(callback).then(resolve);
+                            } else {
+                                resolve();
+                            }
+                        }, 100);
+                    });
                 }
             } catch (error) {
                 console.error('Error in whenThemeReady:', error);
+                return Promise.resolve();
             }
         };
+
+        console.log('ThemeManager helper functions initialized');
     }
     
     return themeManagerInstance;
@@ -421,13 +469,16 @@ if (!window._themeManagerInitialized) {
     window._themeManagerInitialized = true;
     
     // 即座に初期化を開始
-    initializeThemeManager();
+    const manager = initializeThemeManager();
 
     // DOMContentLoadedでも確実に初期化
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeThemeManager);
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded - ensuring ThemeManager initialization');
+            initializeThemeManager();
+        });
     } else {
-        initializeThemeManager();
+        console.log('DOM already loaded - ThemeManager initialized');
     }
 
     // ページ読み込み完了後にも再確認
@@ -436,10 +487,34 @@ if (!window._themeManagerInitialized) {
         if (window.ThemeManager) {
             window.ThemeManager.forceReapply();
         } else {
+            console.warn('ThemeManager not available on window load');
             initializeThemeManager();
+        }
+    });
+
+    // エラーイベントの監視
+    window.addEventListener('error', (event) => {
+        // ThemeManager関連のエラーをキャッチ
+        if (event.error && event.error.message && 
+            event.error.message.includes('ThemeManager')) {
+            console.warn('ThemeManager error caught:', event.error.message);
+            // エラーが発生した場合は再初期化を試行
+            setTimeout(() => {
+                if (!window.ThemeManager || !window.ThemeManager.isInitialized) {
+                    console.log('Attempting ThemeManager recovery...');
+                    window._themeManagerInitialized = false;
+                    themeManagerInstance = null;
+                    initializeThemeManager();
+                }
+            }, 1000);
         }
     });
 }
 
 // テーマ適用の確認用
-console.log('Enhanced Theme Manager script loaded');
+console.log('Enhanced Theme Manager script loaded and initialized');
+
+// Export for module usage
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = ThemeManager;
+}
