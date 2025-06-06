@@ -233,57 +233,44 @@
 
     @script
     <script>
-        let isProcessingThemeChange = false;
-
-        // テーマ変更イベントの処理（重複防止）
-        $wire.on('theme-changed', (event) => {
-            if (isProcessingThemeChange) {
-                console.log('Theme change already in progress, skipping');
-                return;
-            }
-
-            isProcessingThemeChange = true;
-            console.log('Processing theme change:', event.theme);
-            
-            setTimeout(() => {
-                if (window.setTheme && typeof window.setTheme === 'function') {
-                    window.setTheme(event.theme);
-                }
-                isProcessingThemeChange = false;
-            }, 100);
+        // シンプルなイベント処理のみ
+        
+        // テーマ更新イベントの処理
+        $wire.on('theme-updated', (event) => {
+            console.log('Theme updated event received:', event);
+            // ThemeManagerが処理するので、ここでは何もしない
+            // localStorageへの保存もThemeManagerが行う
         });
 
         // 外観更新イベントの処理
         $wire.on('appearance-updated', (event) => {
-            console.log('Appearance updated:', event);
+            console.log('Appearance updated event received:', event);
             
             // 成功メッセージを表示
-            const message = document.createElement('div');
-            message.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-            message.textContent = 'Settings saved successfully!';
-            document.body.appendChild(message);
-            
-            // テーマも更新
-            if (!isProcessingThemeChange && event.theme) {
-                isProcessingThemeChange = true;
-                setTimeout(() => {
-                    if (window.setTheme && typeof window.setTheme === 'function') {
-                        window.setTheme(event.theme);
-                    }
-                    isProcessingThemeChange = false;
-                }, 100);
-            }
-            
-            setTimeout(() => {
-                if (message.parentNode) {
-                    message.parentNode.removeChild(message);
-                }
-            }, 3000);
+            showSuccessMessage('Settings saved successfully!');
         });
+
+        // 成功メッセージ表示関数
+        function showSuccessMessage(message) {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-300';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            // 3秒後に削除
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 3000);
+        }
 
         // 初期化処理
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Appearance component loaded');
+            console.log('Appearance component loaded and ready');
         });
     </script>
     @endscript

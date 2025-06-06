@@ -2,7 +2,7 @@
 
 namespace App\Livewire\Settings;
 
-use Illuminate\Support\Facades\{Auth, Log, Session, Schema};
+use Illuminate\Support\Facades\{Auth, Log, Session};
 use Livewire\Component;
 
 class Appearance extends Component
@@ -12,8 +12,6 @@ class Appearance extends Component
     public string $timezone = 'UTC';
     public bool $animations = true;
     public bool $sound_notifications = false;
-
-    private $lastThemeUpdate = null; // デバウンス用
 
     public function mount(): void
     {
@@ -25,15 +23,19 @@ class Appearance extends Component
             // ユーザーから設定を取得
             $user = Auth::user();
             if ($user) {
-                $this->timezone = $user->getTimezone();
+                $this->timezone = $user->timezone ?? config('app.timezone', 'UTC');
+                
+                // ユーザーのpreferencesから取得
+                if ($user->preferences) {
+                    $this->theme = $user->preferences['theme'] ?? $this->theme;
+                    $this->language = $user->preferences['language'] ?? $this->language;
+                    $this->animations = $user->preferences['animations'] ?? true;
+                    $this->sound_notifications = $user->preferences['sound_notifications'] ?? false;
+                }
             } else {
                 $this->timezone = config('app.timezone', 'UTC');
             }
             
-            // その他の設定
-            $this->animations = session('animations', true);
-            $this->sound_notifications = session('sound_notifications', false);
-
             Log::info('Appearance component mounted', [
                 'theme' => $this->theme,
                 'language' => $this->language,
@@ -54,30 +56,32 @@ class Appearance extends Component
     }
 
     /**
-     * テーマ変更時の処理（デバウンス機能付き）
+     * テーマ変更時の処理（ライブ更新）
      */
     public function updatedTheme($value): void
     {
         try {
             if (!in_array($value, ['light', 'dark', 'system'])) {
                 $value = 'system';
-            }
-
-            // デバウンス処理
-            $now = microtime(true);
-            if ($this->lastThemeUpdate && ($now - $this->lastThemeUpdate) < 0.5) {
-                Log::debug('Theme update throttled', ['value' => $value]);
+                $this->theme = $value;
                 return;
             }
-            $this->lastThemeUpdate = $now;
 
             // セッションに保存
             session(['theme' => $value]);
             
-            // JavaScriptに通知（配列形式で送信）
-            $this->dispatch('theme-changed', theme: $value);
+            // ユーザーのpreferencesにも保存
+            $user = Auth::user();
+            if ($user) {
+                $preferences = $user->preferences ?? [];
+                $preferences['theme'] = $value;
+                $user->update(['preferences' => $preferences]);
+            }
             
-            Log::info('Theme updated', ['theme' => $value, 'session_id' => session()->getId()]);
+            // フロントエンドにテーマ変更を通知
+            $this->dispatch('theme-updated', theme: $value);
+            
+            Log::info('Theme updated', ['theme' => $value]);
             
         } catch (\Exception $e) {
             Log::error('Error updating theme', [
@@ -96,7 +100,12 @@ class Appearance extends Component
             session(['locale' => $value]);
             app()->setLocale($value);
             
-            $this->dispatch('language-updated', language: $value);
+            $user = Auth::user();
+            if ($user) {
+                $preferences = $user->preferences ?? [];
+                $preferences['language'] = $value;
+                $user->update(['preferences' => $preferences]);
+            }
             
             Log::info('Language updated', ['language' => $value]);
             
@@ -109,7 +118,7 @@ class Appearance extends Component
     }
 
     /**
-     * タイムゾーン変更時の処理（修正版）
+     * タイムゾーン変更時の処理
      */
     public function updatedTimezone($value): void
     {
@@ -117,27 +126,8 @@ class Appearance extends Component
             if (in_array($value, timezone_identifiers_list())) {
                 $user = Auth::user();
                 if ($user) {
-                    Log::info('Before timezone update', [
-                        'user_id' => $user->id,
-                        'current_timezone' => $user->timezone,
-                        'new_timezone' => $value,
-                        'fillable' => $user->getFillable()
-                    ]);
-
-                    // 直接updateメソッドを使用
-                    $updated = $user->update(['timezone' => $value]);
-                    
-                    Log::info('Timezone update result', [
-                        'updated' => $updated,
-                        'user_timezone_after' => $user->fresh()->timezone
-                    ]);
-
-                    if ($updated) {
-                        $this->dispatch('timezone-updated', timezone: $value);
-                        Log::info('Timezone updated successfully', ['timezone' => $value]);
-                    } else {
-                        Log::warning('Timezone update failed');
-                    }
+                    $user->update(['timezone' => $value]);
+                    Log::info('Timezone updated successfully', ['timezone' => $value]);
                 } else {
                     Log::warning('No authenticated user for timezone update');
                 }
@@ -147,8 +137,7 @@ class Appearance extends Component
         } catch (\Exception $e) {
             Log::error('Error updating timezone', [
                 'timezone' => $value,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'error' => $e->getMessage()
             ]);
         }
     }
@@ -160,7 +149,14 @@ class Appearance extends Component
     {
         try {
             session(['animations' => $value]);
-            $this->dispatch('animations-updated', animations: $value);
+            
+            $user = Auth::user();
+            if ($user) {
+                $preferences = $user->preferences ?? [];
+                $preferences['animations'] = $value;
+                $user->update(['preferences' => $preferences]);
+            }
+            
         } catch (\Exception $e) {
             Log::error('Error updating animations setting', [
                 'error' => $e->getMessage()
@@ -175,7 +171,14 @@ class Appearance extends Component
     {
         try {
             session(['sound_notifications' => $value]);
-            $this->dispatch('sound-notifications-updated', soundNotifications: $value);
+            
+            $user = Auth::user();
+            if ($user) {
+                $preferences = $user->preferences ?? [];
+                $preferences['sound_notifications'] = $value;
+                $user->update(['preferences' => $preferences]);
+            }
+            
         } catch (\Exception $e) {
             Log::error('Error updating sound notifications setting', [
                 'error' => $e->getMessage()
@@ -184,7 +187,7 @@ class Appearance extends Component
     }
 
     /**
-     * フォーム送信処理（修正版）
+     * フォーム送信処理
      */
     public function updateAppearance(): void
     {
@@ -217,45 +220,24 @@ class Appearance extends Component
             // アプリケーションロケールを設定
             app()->setLocale($this->language);
 
-            // ユーザーのタイムゾーンを更新（確実に更新）
+            // ユーザー設定を更新
             $user = Auth::user();
             if ($user) {
-                Log::info('Before appearance update - user timezone', [
-                    'user_id' => $user->id,
-                    'current_timezone' => $user->timezone,
-                    'new_timezone' => $this->timezone
-                ]);
-
-                // fillableに確実にtimezoneが含まれていることを確認
-                if (!in_array('timezone', $user->getFillable())) {
-                    Log::error('timezone is not in fillable array', [
-                        'fillable' => $user->getFillable()
-                    ]);
-                }
-
-                // 強制的にtimezone属性を設定
-                $user->timezone = $this->timezone;
-                $saved = $user->save();
-
-                Log::info('Timezone save result', [
-                    'saved' => $saved,
-                    'user_timezone_after_save' => $user->timezone,
-                    'fresh_user_timezone' => $user->fresh()->timezone
-                ]);
+                // タイムゾーンを更新
+                $user->update(['timezone' => $this->timezone]);
 
                 // preferencesも更新
-                $user->updatePreferences([
+                $preferences = [
                     'theme' => $this->theme,
                     'language' => $this->language,
                     'animations' => $this->animations,
                     'sound_notifications' => $this->sound_notifications,
-                ]);
+                ];
+                
+                $user->update(['preferences' => $preferences]);
             }
 
-            // サーバーサイドとの同期もここで行う
-            $this->syncPreferencesWithServer();
-
-            // フロントエンドに通知（Livewire 3の名前付きパラメータ形式）
+            // フロントエンドに全設定を通知
             $this->dispatch('appearance-updated', 
                 theme: $this->theme,
                 language: $this->language,
@@ -280,41 +262,6 @@ class Appearance extends Component
     }
 
     /**
-     * サーバーAPIとの同期
-     */
-    private function syncPreferencesWithServer(): void
-    {
-        try {
-            // 内部API呼び出しでセッションとの同期
-            $preferences = [
-                'theme' => $this->theme,
-                'language' => $this->language,
-                'timezone' => $this->timezone,
-            ];
-
-            // HTTPクライアントを使用してAPIと同期
-            $response = \Http::withHeaders([
-                'X-CSRF-TOKEN' => csrf_token(),
-                'Accept' => 'application/json',
-                'Content-Type' => 'application/json',
-            ])->post(url('/api/user/preferences'), $preferences);
-
-            if (!$response->successful()) {
-                Log::warning('Failed to sync preferences with server', [
-                    'status' => $response->status(),
-                    'body' => $response->body()
-                ]);
-            }
-
-        } catch (\Exception $e) {
-            Log::warning('Error syncing preferences with server', [
-                'error' => $e->getMessage()
-            ]);
-            // サーバー同期の失敗は致命的ではないので続行
-        }
-    }
-
-    /**
      * デフォルト設定にリセット
      */
     public function resetToDefaults(): void
@@ -330,28 +277,6 @@ class Appearance extends Component
             
         } catch (\Exception $e) {
             Log::error('Error resetting appearance settings', [
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * 外部からのテーマ変更を処理（リスナーではなく直接呼び出し用）
-     */
-    public function handleExternalThemeChange($theme): void
-    {
-        try {
-            Log::info('External theme change received', ['theme' => $theme]);
-            
-            if (in_array($theme, ['light', 'dark', 'system'])) {
-                $this->theme = $theme;
-                session(['theme' => $theme]);
-                
-                // フロントエンドに通知
-                $this->dispatch('theme-changed', theme: $theme);
-            }
-        } catch (\Exception $e) {
-            Log::error('Error handling external theme change', [
                 'error' => $e->getMessage()
             ]);
         }

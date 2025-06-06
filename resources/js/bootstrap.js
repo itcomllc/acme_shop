@@ -89,3 +89,6 @@ if (pusherAppKey && pusherAppKey !== '' && pusherAppKey !== 'your-pusher-key') {
         configurable: false
     });
 }
+
+// Alpine.jsの重複を防ぐ（bootstrap.jsでは読み込まない）
+console.log('Bootstrap.js loaded - Alpine.js will be loaded by app.js');
