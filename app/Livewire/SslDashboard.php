@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use Livewire\Component;
+use Livewire\Attributes\On;
 use App\Services\SSLSaaSService;
 use App\Models\{Subscription, Certificate};
 use Illuminate\Support\Facades\Auth;
@@ -13,13 +14,6 @@ class SslDashboard extends Component
     public $showSubscriptionModal = false;
     public $dashboardData = null;
     public $loading = true;
-
-    protected $listeners = [
-        'certificateCreated' => 'refreshDashboard',
-        'subscriptionCreated' => 'refreshDashboard',
-        'open-subscription-modal' => 'openSubscriptionModal',
-        'closeModal' => 'closeModals'
-    ];
 
     public function mount()
     {
@@ -62,21 +56,25 @@ class SslDashboard extends Component
         $this->showNewCertModal = true;
     }
 
+    #[On('certificateCreated')]
+    #[On('subscriptionCreated')]
+    public function refreshDashboard()
+    {
+        $this->loadDashboardData();
+        $this->closeModals();
+    }
+
+    #[On('open-subscription-modal')]
     public function openSubscriptionModal()
     {
         $this->showSubscriptionModal = true;
     }
 
+    #[On('closeModal')]
     public function closeModals()
     {
         $this->showNewCertModal = false;
         $this->showSubscriptionModal = false;
-    }
-
-    public function refreshDashboard()
-    {
-        $this->loadDashboardData();
-        $this->closeModals();
     }
 
     private function getAvailablePlans()

@@ -1,7 +1,7 @@
 <div>
     <div class="flex items-center justify-between mb-4">
         <h3 class="text-lg font-medium text-gray-900">Issue New Certificate</h3>
-        <button wire:click="$emit('closeModal')" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        <button wire:click="$dispatch('closeModal')" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
     </div>
     
     <form wire:submit.prevent="createCertificate">
@@ -28,7 +28,7 @@
         <div class="flex justify-end space-x-3">
             <button
                 type="button"
-                wire:click="$emit('closeModal')"
+                wire:click="$dispatch('closeModal')"
                 class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
             >
                 Cancel

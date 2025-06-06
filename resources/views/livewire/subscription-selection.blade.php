@@ -38,11 +38,11 @@
                         </ul>
                         
                         <button
-                            @click="$dispatch('open-subscription-modal')"
+                            wire:click="$dispatch('open-subscription-modal')"
                             class="w-full py-3 px-4 rounded-lg font-medium transition-colors {{ $key === 'professional' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900' }}"
                         >
                             <svg class="h-4 w-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 003 3z"></path>
                             </svg>
                             Choose {{ $plan['name'] }}
                         </button>

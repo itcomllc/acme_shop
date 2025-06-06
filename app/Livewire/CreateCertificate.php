@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Auth;
 
 class CreateCertificate extends Component
 {
-   public $domain = '';
+    public $domain = '';
     public $loading = false;
     public $error = '';
 
@@ -42,7 +42,7 @@ class CreateCertificate extends Component
 
             $certificate = $sslService->issueCertificate($subscription, $this->domain);
 
-            $this->emit('certificateCreated');
+            $this->dispatch('certificateCreated');
             $this->reset(['domain']);
             
             session()->flash('message', 'Certificate creation started for ' . $this->domain);
