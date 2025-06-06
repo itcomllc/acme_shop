@@ -5,10 +5,10 @@ use App\Http\Controllers\{
     SSLController,
     SSLDashboardController,
     SquareWebhookController,
-    EabController  // 追加
+    EabController
 };
 use App\Http\Controllers\Admin\{
-    AdminDashboardController,    // 追加
+    AdminDashboardController,
     AdminRoleController,
     AdminUserController
 };
@@ -44,7 +44,7 @@ Route::middleware(['auth', 'verified'])->prefix('ssl')->name('ssl.')->group(func
         return view('ssl.subscriptions.show');
     })->name('subscriptions.show');
     
-    // Billing routes - 修正：billing.indexからssl.billing.indexに変更
+    // Billing routes
     Route::get('/billing', function () {
         return view('billing.index');
     })->name('billing.index');
@@ -82,25 +82,14 @@ Route::middleware(['auth', 'verified'])->prefix('ssl')->name('ssl.')->group(func
     });
 });
 
-// Profile/Settings routes (if not already defined elsewhere)
-Route::middleware(['auth'])->group(function () {
-    Route::get('/profile/edit', function () {
-        return view('profile.edit');
-    })->name('profile.edit');
-    
-    Route::get('/settings/profile', function () {
-        return view('settings.profile');
-    })->name('settings.profile');
-});
-
 // Admin routes (requires admin permissions)
 Route::middleware(['auth', 'permission:admin.access'])->prefix('admin')->name('admin.')->group(function () {
     
-    // Admin Dashboard - AdminDashboardController を追加
+    // Admin Dashboard
     Route::get('/', [AdminDashboardController::class, 'index'])->name('dashboard');
     Route::get('/system-overview', [AdminDashboardController::class, 'systemOverview'])->name('system.overview');
     
-    // 既存のUser Management routes
+    // User Management routes
     Route::middleware('permission:users.view_all')->group(function () {
         Route::resource('users', AdminUserController::class);
         Route::post('users/{user}/assign-role', [AdminUserController::class, 'assignRole'])->name('users.assign-role');
@@ -110,7 +99,7 @@ Route::middleware(['auth', 'permission:admin.access'])->prefix('admin')->name('a
         Route::get('users-statistics', [AdminUserController::class, 'statistics'])->name('users.statistics');
     });
     
-    // 既存のRole Management routes
+    // Role Management routes
     Route::middleware('permission:admin.roles.manage')->group(function () {
         Route::resource('roles', AdminRoleController::class);
         Route::post('roles/{role}/assign-user', [AdminRoleController::class, 'assignToUser'])->name('roles.assign-user');
