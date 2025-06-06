@@ -65,7 +65,7 @@ class Profile extends Component
 
     public function render()
     {
-        /** @var \Livewire\Volt\Component $view */
+        /** @var \Livewire\Component $view */
         $view = view('livewire.settings.profile');
         return $view->extends('layouts.app');
     }

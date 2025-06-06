@@ -1,6 +1,8 @@
 <div x-data="appearanceComponent()" x-init="init()"
     @theme-changed.window="handleThemeChange($event.detail.theme)"
-    @appearance-updated.window="handleAppearanceUpdate($event.detail.theme)"
+    @appearance-updated.window="handleAppearanceUpdate($event.detail)"
+    @animations-updated.window="handleAnimationsUpdate($event.detail.animations)"
+    @sound-notifications-updated.window="handleSoundNotificationsUpdate($event.detail.soundNotifications)"
     class="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 transition-colors duration-200">
     
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
@@ -69,10 +71,16 @@
                         <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ __('Customize the look and feel of your SSL SaaS Platform experience.') }}</p>
                     </div>
 
-                    <!-- 成功メッセージ -->
+                    <!-- 成功・エラーメッセージ -->
                     @if (session('status') === 'appearance-updated')
                         <div class="mb-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg dark:bg-green-900 dark:border-green-700 dark:text-green-300">
                             {{ __('Appearance settings updated successfully.') }}
+                        </div>
+                    @endif
+
+                    @if (session('error'))
+                        <div class="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg dark:bg-red-900 dark:border-red-700 dark:text-red-300">
+                            {{ session('error') }}
                         </div>
                     @endif
 
@@ -113,13 +121,10 @@
                         <!-- Language Selection -->
                         <div>
                             <label for="language" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Language') }}</label>
-                            <select wire:model="language" name="language" id="language" class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200">
-                                <option value="en">English</option>
-                                <option value="ja">日本語 (Japanese)</option>
-                                <option value="es">Español (Spanish)</option>
-                                <option value="fr">Français (French)</option>
-                                <option value="de">Deutsch (German)</option>
-                                <option value="zh">中文 (Chinese)</option>
+                            <select wire:model.live="language" name="language" id="language" class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200">
+                                @foreach($availableLanguages as $code => $name)
+                                    <option value="{{ $code }}">{{ $name }}</option>
+                                @endforeach
                             </select>
                             <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
                                 {{ __('Select your preferred language for the interface.') }}
@@ -129,19 +134,10 @@
                         <!-- Timezone Selection -->
                         <div>
                             <label for="timezone" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Timezone') }}</label>
-                            <select wire:model="timezone" name="timezone" id="timezone" class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200">
-                                <option value="UTC">UTC</option>
-                                <option value="America/New_York">Eastern Time (US)</option>
-                                <option value="America/Chicago">Central Time (US)</option>
-                                <option value="America/Denver">Mountain Time (US)</option>
-                                <option value="America/Los_Angeles">Pacific Time (US)</option>
-                                <option value="Europe/London">London</option>
-                                <option value="Europe/Paris">Paris</option>
-                                <option value="Europe/Berlin">Berlin</option>
-                                <option value="Asia/Tokyo">Tokyo</option>
-                                <option value="Asia/Shanghai">Shanghai</option>
-                                <option value="Asia/Seoul">Seoul</option>
-                                <option value="Australia/Sydney">Sydney</option>
+                            <select wire:model.live="timezone" name="timezone" id="timezone" class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200">
+                                @foreach($availableTimezones as $tz => $name)
+                                    <option value="{{ $tz }}">{{ $name }}</option>
+                                @endforeach
                             </select>
                             <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
                                 {{ __('Your timezone affects how dates and times are displayed.') }}
@@ -160,7 +156,7 @@
                                     </p>
                                 </div>
                                 <label class="inline-flex items-center">
-                                    <input type="checkbox" wire:model="animations" class="form-checkbox h-5 w-5 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500">
+                                    <input type="checkbox" wire:model.live="animations" class="form-checkbox h-5 w-5 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500">
                                 </label>
                             </div>
 
@@ -172,7 +168,7 @@
                                     </p>
                                 </div>
                                 <label class="inline-flex items-center">
-                                    <input type="checkbox" wire:model="sound_notifications" class="form-checkbox h-5 w-5 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500">
+                                    <input type="checkbox" wire:model.live="sound_notifications" class="form-checkbox h-5 w-5 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500">
                                 </label>
                             </div>
                         </div>
@@ -234,6 +230,8 @@
                                 <p>Current Theme: <span id="debug-current-theme">{{ $theme }}</span></p>
                                 <p>Session Theme: {{ session('theme', 'not set') }}</p>
                                 <p>User Timezone: {{ Auth::user()->timezone ?? 'not set' }}</p>
+                                <p>Language: {{ $language }}</p>
+                                <p>Animations: {{ $animations ? 'enabled' : 'disabled' }}</p>
                                 <div class="flex gap-2 mt-2">
                                     <button type="button" onclick="window.forceReapplyTheme && window.forceReapplyTheme()"
                                         class="text-blue-600 hover:underline text-xs">
@@ -242,6 +240,10 @@
                                     <button type="button" onclick="console.log('ThemeManager:', window.ThemeManager)"
                                         class="text-blue-600 hover:underline text-xs">
                                         Log ThemeManager
+                                    </button>
+                                    <button type="button" onclick="console.log('Livewire data:', @this)"
+                                        class="text-blue-600 hover:underline text-xs">
+                                        Log Livewire
                                     </button>
                                 </div>
                             </div>
@@ -255,23 +257,45 @@
 
 @push('scripts')
 <script>
-// Appearance Component JavaScript - Fixed Version
+// Enhanced Appearance Component JavaScript - Livewire Integration Fixed
 function appearanceComponent() {
     return {
         themeManagerReady: false,
-        currentTheme: 'system', // デフォルト値
-        maxRetries: 20, // リトライ回数を減らす
-        retryInterval: 250, // リトライ間隔を増やす
+        currentTheme: 'system',
+        maxRetries: 15,
+        retryInterval: 300,
 
         init() {
             console.log('Appearance component initialized');
-
+            
             // Livewireからの初期テーマ値を取得
-            const initialTheme = this.$wire?.theme || 'system';
+            const initialTheme = @json($theme);
             this.currentTheme = initialTheme;
             console.log('Initial theme from Livewire:', initialTheme);
 
             this.waitForThemeManager();
+            this.setupLivewireSync();
+        },
+
+        setupLivewireSync() {
+            // Livewireとの双方向同期を確立
+            console.log('Setting up Livewire sync');
+            
+            // ThemeManagerが利用可能になったら連携開始
+            this.whenThemeManagerReady(() => {
+                if (window.ThemeManager && window.ThemeManager.addObserver) {
+                    window.ThemeManager.addObserver((theme, effectiveTheme) => {
+                        console.log('ThemeManager theme change:', theme, '->', effectiveTheme);
+                        
+                        // Livewireプロパティを更新
+                        if (this.$wire && this.$wire.set) {
+                            this.$wire.set('theme', theme);
+                        }
+                        
+                        this.updatePreview(effectiveTheme);
+                    });
+                }
+            });
         },
 
         waitForThemeManager() {
@@ -279,32 +303,36 @@ function appearanceComponent() {
 
             const checkInterval = setInterval(() => {
                 attempts++;
-
                 console.log(`Checking for ThemeManager (attempt ${attempts}/${this.maxRetries})`);
 
-                if (window.ThemeManager && typeof window.setTheme === 'function' && window.ThemeManager
-                    .isInitialized) {
+                if (window.ThemeManager && typeof window.setTheme === 'function' && window.ThemeManager.isInitialized) {
                     clearInterval(checkInterval);
                     this.themeManagerReady = true;
                     console.log('ThemeManager is ready for appearance component');
 
                     // 初期テーマを適用
                     this.applyTheme(this.currentTheme);
-
-                    // ThemeManagerのオブザーバーに登録
-                    if (window.ThemeManager.addObserver) {
-                        window.ThemeManager.addObserver((theme, effectiveTheme) => {
-                            this.updatePreview(effectiveTheme);
-                        });
-                    }
                 } else if (attempts >= this.maxRetries) {
                     clearInterval(checkInterval);
-                    console.warn(
-                        `ThemeManager not available after ${this.maxRetries} attempts, using fallback`);
+                    console.warn(`ThemeManager not available after ${this.maxRetries} attempts, using fallback`);
                     this.themeManagerReady = false;
                     this.applyTheme(this.currentTheme);
                 }
             }, this.retryInterval);
+        },
+
+        whenThemeManagerReady(callback) {
+            if (this.themeManagerReady) {
+                callback();
+            } else {
+                setTimeout(() => {
+                    if (this.themeManagerReady) {
+                        callback();
+                    } else {
+                        this.whenThemeManagerReady(callback);
+                    }
+                }, 100);
+            }
         },
 
         applyTheme(theme) {
@@ -317,6 +345,14 @@ function appearanceComponent() {
                     console.log('Theme applied via ThemeManager:', theme);
                 } catch (error) {
                     console.error('Error applying theme via ThemeManager:', error);
+                    this.fallbackApplyTheme(theme);
+                }
+            } else if (window.setTheme) {
+                try {
+                    window.setTheme(theme);
+                    console.log('Theme applied via global setTheme:', theme);
+                } catch (error) {
+                    console.error('Error applying theme via global setTheme:', error);
                     this.fallbackApplyTheme(theme);
                 }
             } else {
@@ -335,23 +371,20 @@ function appearanceComponent() {
                 // 手動でDOMクラスを更新
                 const html = document.documentElement;
                 html.classList.remove('dark', 'light');
+                html.setAttribute('data-theme', theme);
 
                 if (theme === 'dark') {
                     html.classList.add('dark');
                 } else if (theme === 'light') {
                     html.classList.add('light');
                 } else if (theme === 'system') {
-                    const prefersDark = window.matchMedia &&
-                        window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
                     html.classList.add(prefersDark ? 'dark' : 'light');
                 }
 
                 // カスタムイベントを発火
                 window.dispatchEvent(new CustomEvent('theme-applied', {
-                    detail: {
-                        theme,
-                        effectiveTheme: this.getEffectiveTheme(theme)
-                    }
+                    detail: { theme, effectiveTheme: this.getEffectiveTheme(theme) }
                 }));
             } catch (error) {
                 console.error('Error in fallback theme application:', error);
@@ -360,8 +393,7 @@ function appearanceComponent() {
 
         getEffectiveTheme(theme) {
             if (theme === 'system') {
-                return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' :
-                    'light';
+                return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
             }
             return theme;
         },
@@ -381,6 +413,12 @@ function appearanceComponent() {
                     }
                 });
             }
+
+            // デバッグ表示の更新
+            const debugElement = document.getElementById('debug-current-theme');
+            if (debugElement) {
+                debugElement.textContent = this.currentTheme;
+            }
         },
 
         handleThemeChange(theme) {
@@ -388,12 +426,25 @@ function appearanceComponent() {
             this.applyTheme(theme);
         },
 
-        handleAppearanceUpdate(theme) {
-            console.log('Appearance update event received:', theme);
-            this.applyTheme(theme);
-
+        handleAppearanceUpdate(data) {
+            console.log('Appearance update event received:', data);
+            
+            if (data.theme) {
+                this.applyTheme(data.theme);
+            }
+            
             // 成功メッセージを表示
             this.showSuccessMessage();
+        },
+
+        handleAnimationsUpdate(animations) {
+            console.log('Animations setting updated:', animations);
+            // アニメーション設定の更新処理
+        },
+
+        handleSoundNotificationsUpdate(soundNotifications) {
+            console.log('Sound notifications setting updated:', soundNotifications);
+            // 音声通知設定の更新処理
         },
 
         showSuccessMessage() {
@@ -404,53 +455,18 @@ function appearanceComponent() {
                     message.classList.add('hidden');
                 }, 3000);
             }
-        },
-
-        // Livewireとの同期
-        syncWithLivewire(theme) {
-            if (this.$wire && typeof this.$wire.set === 'function') {
-                try {
-                    this.$wire.set('theme', theme);
-                } catch (error) {
-                    console.warn('Could not sync theme with Livewire:', error);
-                }
-            }
         }
     };
 }
 
-// Livewireイベントリスナー（DOMContentLoaded後に設定）
+// DOM loaded イベントリスナー
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM loaded - setting up appearance listeners');
+});
 
-    // Livewireの初期化を待つ
-    document.addEventListener('livewire:init', () => {
-        console.log('Livewire initialized for appearance component');
-
-        // デバッグ表示の更新
-        window.addEventListener('theme-applied', (event) => {
-            const debugElement = document.getElementById('debug-current-theme');
-            if (debugElement) {
-                debugElement.textContent = event.detail.theme;
-            }
-        });
-
-        // テーマ変更の即座反映
-        if (typeof Livewire !== 'undefined') {
-            Livewire.on('theme-changed', (event) => {
-                console.log('Global theme-changed event:', event);
-                const theme = Array.isArray(event) ? event[0]?.theme : event.theme;
-                if (theme) {
-                    // すべてのappearanceコンポーネントに通知
-                    window.dispatchEvent(new CustomEvent('appearance-theme-change', {
-                        detail: {
-                            theme
-                        }
-                    }));
-                }
-            });
-        }
-    });
+// Livewire初期化イベントリスナー
+document.addEventListener('livewire:init', () => {
+    console.log('Livewire initialized for appearance component');
 });
 
 // ページナビゲーション時の処理
@@ -463,42 +479,6 @@ document.addEventListener('livewire:navigated', () => {
             window.ThemeManager.forceReapply();
         }, 50);
     }
-
-    // appearance固有の処理
-    setTimeout(() => {
-        const preview = document.getElementById('theme-preview');
-        if (preview) {
-            console.log('Re-initializing appearance preview');
-            // プレビューの再初期化
-            const currentTheme = window.getCurrentTheme ? window.getCurrentTheme() : 'system';
-            const effectiveTheme = window.getEffectiveTheme ? window.getEffectiveTheme() :
-                currentTheme;
-
-            // プレビューを更新
-            const cards = preview.querySelectorAll('.border');
-            cards.forEach(card => {
-                if (effectiveTheme === 'dark') {
-                    card.classList.add('dark:border-gray-700', 'dark:bg-gray-800');
-                } else {
-                    card.classList.remove('dark:border-gray-700', 'dark:bg-gray-800');
-                }
-            });
-        }
-    }, 100);
-});
-
-// 外部テーマ変更イベントのリスナー
-window.addEventListener('appearance-theme-change', (event) => {
-    console.log('Appearance theme change event:', event.detail.theme);
-
-    // Alpine.jsコンポーネントに通知
-    const appearanceComponent = document.querySelector('[x-data*="appearanceComponent"]');
-    if (appearanceComponent && appearanceComponent._x_dataStack) {
-        const component = appearanceComponent._x_dataStack[0];
-        if (component && typeof component.handleThemeChange === 'function') {
-            component.handleThemeChange(event.detail.theme);
-        }
-    }
 });
 
 console.log('Appearance component JavaScript loaded');
@@ -506,12 +486,12 @@ console.log('Appearance component JavaScript loaded');
 
 <style>
 /* ラジオボタンの選択状態を視覚的に示す */
-input[type="radio"]:checked+* {
+input[type="radio"]:checked + * {
     border-color: rgb(59 130 246) !important;
     background-color: rgb(239 246 255) !important;
 }
 
-.dark input[type="radio"]:checked+* {
+.dark input[type="radio"]:checked + * {
     background-color: rgba(59, 130, 246, 0.2) !important;
 }
 
