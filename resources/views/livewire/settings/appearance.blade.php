@@ -219,147 +219,147 @@ new class extends Component
         </div>
         @endif
     </x-settings.layout>
-</div>
 
-<script>
-function appearanceComponent() {
-    return {
-        themeManagerReady: false,
-        
-        init() {
-            console.log('Appearance component initialized');
-            this.initializeThemeManager();
-        },
-
-        initializeThemeManager() {
-            // ThemeManagerの準備を待つ
-            this.waitForThemeManager(() => {
-                this.themeManagerReady = true;
-                console.log('ThemeManager is ready');
-                
-                // 初期テーマを適用
-                const initialTheme = @json($theme);
-                this.applyTheme(initialTheme);
-            });
-        },
-
-        waitForThemeManager(callback) {
-            let attempts = 0;
-            const maxAttempts = 50; // 5秒待機
+    <script>
+    function appearanceComponent() {
+        return {
+            themeManagerReady: false,
             
-            const checkInterval = setInterval(() => {
-                attempts++;
-                
-                if (window.ThemeManager && typeof window.setTheme === 'function') {
-                    clearInterval(checkInterval);
-                    callback();
-                } else if (attempts >= maxAttempts) {
-                    clearInterval(checkInterval);
-                    console.warn('ThemeManager not available, using fallback');
-                    this.themeManagerReady = false;
-                    callback();
-                }
-            }, 100);
-        },
+            init() {
+                console.log('Appearance component initialized');
+                this.initializeThemeManager();
+            },
 
-        applyTheme(theme) {
-            console.log('Applying theme:', theme);
-            
-            if (this.themeManagerReady && window.ThemeManager) {
-                try {
-                    window.ThemeManager.setTheme(theme);
-                    console.log('Theme applied via ThemeManager:', theme);
-                } catch (error) {
-                    console.error('Error applying theme via ThemeManager:', error);
+            initializeThemeManager() {
+                // ThemeManagerの準備を待つ
+                this.waitForThemeManager(() => {
+                    this.themeManagerReady = true;
+                    console.log('ThemeManager is ready');
+                    
+                    // 初期テーマを適用
+                    const initialTheme = @json($theme);
+                    this.applyTheme(initialTheme);
+                });
+            },
+
+            waitForThemeManager(callback) {
+                let attempts = 0;
+                const maxAttempts = 50; // 5秒待機
+                
+                const checkInterval = setInterval(() => {
+                    attempts++;
+                    
+                    if (window.ThemeManager && typeof window.setTheme === 'function') {
+                        clearInterval(checkInterval);
+                        callback();
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(checkInterval);
+                        console.warn('ThemeManager not available, using fallback');
+                        this.themeManagerReady = false;
+                        callback();
+                    }
+                }, 100);
+            },
+
+            applyTheme(theme) {
+                console.log('Applying theme:', theme);
+                
+                if (this.themeManagerReady && window.ThemeManager) {
+                    try {
+                        window.ThemeManager.setTheme(theme);
+                        console.log('Theme applied via ThemeManager:', theme);
+                    } catch (error) {
+                        console.error('Error applying theme via ThemeManager:', error);
+                        this.fallbackApplyTheme(theme);
+                    }
+                } else {
                     this.fallbackApplyTheme(theme);
                 }
-            } else {
-                this.fallbackApplyTheme(theme);
-            }
-        },
+            },
 
-        fallbackApplyTheme(theme) {
-            try {
-                localStorage.setItem('theme', theme);
-                console.log('Theme saved to localStorage (fallback):', theme);
-                
-                // 手動でDOMクラスを更新
-                const html = document.documentElement;
-                html.classList.remove('dark', 'light');
-                
-                if (theme === 'dark') {
-                    html.classList.add('dark');
-                } else if (theme === 'light') {
-                    html.classList.add('light');
-                } else if (theme === 'system') {
-                    const prefersDark = window.matchMedia && 
-                                      window.matchMedia('(prefers-color-scheme: dark)').matches;
-                    html.classList.add(prefersDark ? 'dark' : 'light');
+            fallbackApplyTheme(theme) {
+                try {
+                    localStorage.setItem('theme', theme);
+                    console.log('Theme saved to localStorage (fallback):', theme);
+                    
+                    // 手動でDOMクラスを更新
+                    const html = document.documentElement;
+                    html.classList.remove('dark', 'light');
+                    
+                    if (theme === 'dark') {
+                        html.classList.add('dark');
+                    } else if (theme === 'light') {
+                        html.classList.add('light');
+                    } else if (theme === 'system') {
+                        const prefersDark = window.matchMedia && 
+                                          window.matchMedia('(prefers-color-scheme: dark)').matches;
+                        html.classList.add(prefersDark ? 'dark' : 'light');
+                    }
+                } catch (error) {
+                    console.error('Error in fallback theme application:', error);
                 }
-            } catch (error) {
-                console.error('Error in fallback theme application:', error);
+            },
+
+            handleThemeChange(theme) {
+                console.log('Theme change event received:', theme);
+                this.applyTheme(theme);
+            },
+
+            handleAppearanceUpdate(theme) {
+                console.log('Appearance update event received:', theme);
+                this.applyTheme(theme);
+                
+                // 成功メッセージを表示
+                const message = document.getElementById('save-message');
+                if (message) {
+                    message.classList.remove('hidden');
+                    setTimeout(() => {
+                        message.classList.add('hidden');
+                    }, 3000);
+                }
             }
-        },
+        };
+    }
 
-        handleThemeChange(theme) {
-            console.log('Theme change event received:', theme);
-            this.applyTheme(theme);
-        },
-
-        handleAppearanceUpdate(theme) {
-            console.log('Appearance update event received:', theme);
-            this.applyTheme(theme);
-            
-            // 成功メッセージを表示
-            const message = document.getElementById('save-message');
-            if (message) {
-                message.classList.remove('hidden');
-                setTimeout(() => {
-                    message.classList.add('hidden');
-                }, 3000);
+    // Livewireイベントリスナー
+    document.addEventListener('livewire:init', () => {
+        console.log('Livewire initialized for appearance component');
+        
+        // デバッグ表示の更新
+        window.addEventListener('theme-applied', (event) => {
+            const debugElement = document.getElementById('debug-current-theme');
+            if (debugElement) {
+                debugElement.textContent = event.detail.theme;
             }
-        }
-    };
-}
-
-// Livewireイベントリスナー
-document.addEventListener('livewire:init', () => {
-    console.log('Livewire initialized for appearance component');
-    
-    // デバッグ表示の更新
-    window.addEventListener('theme-applied', (event) => {
-        const debugElement = document.getElementById('debug-current-theme');
-        if (debugElement) {
-            debugElement.textContent = event.detail.theme;
-        }
+        });
     });
-});
-</script>
+    </script>
 
-<style>
-/* ラジオボタンの選択状態を視覚的に示す */
-input[type="radio"]:checked + * {
-    border-color: rgb(59 130 246);
-    background-color: rgb(239 246 255);
-}
+    <style>
+    /* ラジオボタンの選択状態を視覚的に示す */
+    input[type="radio"]:checked + * {
+        border-color: rgb(59 130 246);
+        background-color: rgb(239 246 255);
+    }
 
-.dark input[type="radio"]:checked + * {
-    background-color: rgba(59, 130, 246, 0.2);
-}
+    .dark input[type="radio"]:checked + * {
+        background-color: rgba(59, 130, 246, 0.2);
+    }
 
-/* フォーム要素のダークモード対応 */
-.form-checkbox:checked {
-    background-color: rgb(59 130 246);
-    border-color: rgb(59 130 246);
-}
+    /* フォーム要素のダークモード対応 */
+    .form-checkbox:checked {
+        background-color: rgb(59 130 246);
+        border-color: rgb(59 130 246);
+    }
 
-.dark .form-checkbox {
-    background-color: rgb(55 65 81);
-    border-color: rgb(75 85 99);
-}
+    .dark .form-checkbox {
+        background-color: rgb(55 65 81);
+        border-color: rgb(75 85 99);
+    }
 
-.dark .form-checkbox:checked {
-    background-color: rgb(59 130 246);
-    border-color: rgb(59 130 246);
-}
-</style>
+    .dark .form-checkbox:checked {
+        background-color: rgb(59 130 246);
+        border-color: rgb(59 130 246);
+    }
+    </style>
+</div>
