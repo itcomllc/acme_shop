@@ -194,8 +194,7 @@ class Appearance extends Component
                 $user->update(['preferences' => $preferences]);
             }
 
-            // シンプルなdispatchのみ
-            $this->dispatch('theme-updated', theme: $this->theme);
+            // フォーム送信時はappearance-updatedのみ発火
             $this->dispatch('appearance-updated', 
                 theme: $this->theme,
                 language: $this->language,

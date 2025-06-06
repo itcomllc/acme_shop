@@ -203,14 +203,8 @@ if ($userTheme === 'dark') {
             }, 3000);
         }
 
-        // Initialize theme debugging
-        console.log('Layout loaded with theme:', document.documentElement.getAttribute('data-theme'));
-        console.log('Document classes:', document.documentElement.className);
     </script>
 
-    <!-- Alpine.js
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-     -->
 </body>
 
 </html>
