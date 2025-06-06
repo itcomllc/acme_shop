@@ -2,9 +2,8 @@
 
 namespace App\Livewire\Settings;
 
-use Illuminate\Support\Facades\{Auth, Log, Cache};
+use Illuminate\Support\Facades\{Auth, Log, Session};
 use Livewire\Component;
-use Carbon\Carbon;
 
 class Appearance extends Component
 {
@@ -14,21 +13,24 @@ class Appearance extends Component
     public bool $animations = true;
     public bool $sound_notifications = false;
 
-    protected $listeners = [
-        'theme-changed-externally' => 'handleExternalThemeChange'
-    ];
+    // Livewireのイベントリスナーは削除（手動で処理）
 
     public function mount(): void
     {
         try {
-            // Load user preferences from session or database
+            // セッションから設定を取得
             $this->theme = session('theme', 'system');
             $this->language = session('locale', app()->getLocale());
             
+            // ユーザーから設定を取得
             $user = Auth::user();
-            $this->timezone = $user->timezone ?? config('app.timezone', 'UTC');
+            if ($user) {
+                $this->timezone = $user->timezone ?? config('app.timezone', 'UTC');
+            } else {
+                $this->timezone = config('app.timezone', 'UTC');
+            }
             
-            // Load other preferences from session
+            // その他の設定
             $this->animations = session('animations', true);
             $this->sound_notifications = session('sound_notifications', false);
 
@@ -42,7 +44,7 @@ class Appearance extends Component
                 'error' => $e->getMessage()
             ]);
             
-            // Set safe defaults
+            // デフォルト値を設定
             $this->theme = 'system';
             $this->language = 'en';
             $this->timezone = 'UTC';
@@ -52,63 +54,26 @@ class Appearance extends Component
     }
 
     /**
-     * テーマ変更時にリアルタイムで適用
+     * テーマ変更時の処理
      */
     public function updatedTheme($value): void
     {
         try {
-            Log::info('Theme updated in Livewire', ['theme' => $value]);
-            
-            // 有効な値かチェック
             if (!in_array($value, ['light', 'dark', 'system'])) {
                 $value = 'system';
             }
 
-            // セッションに即座に保存
+            // セッションに保存
             session(['theme' => $value]);
             
-            // ユーザーのデータベースにも保存（オプション）
-            $user = Auth::user();
-            if ($user && method_exists($user, 'update')) {
-                try {
-                    // カラムが存在する場合のみ更新
-                    if (\Schema::hasColumn('users', 'theme_preference')) {
-                        $user->update(['theme_preference' => $value]);
-                    }
-                } catch (\Exception $e) {
-                    Log::warning('Could not save theme to user table', [
-                        'error' => $e->getMessage()
-                    ]);
-                }
-            }
-
-            // JavaScriptのThemeManagerに通知
+            // JavaScriptに通知（配列形式で送信）
             $this->dispatch('theme-changed', theme: $value);
             
-            Log::info('Theme change dispatched', ['theme' => $value]);
+            Log::info('Theme updated', ['theme' => $value]);
+            
         } catch (\Exception $e) {
             Log::error('Error updating theme', [
                 'theme' => $value,
-                'error' => $e->getMessage()
-            ]);
-        }
-    }
-
-    /**
-     * 外部からのテーマ変更を処理
-     */
-    public function handleExternalThemeChange($data): void
-    {
-        try {
-            $theme = $data['theme'] ?? 'system';
-            Log::info('External theme change received', ['theme' => $theme]);
-            
-            if (in_array($theme, ['light', 'dark', 'system'])) {
-                $this->theme = $theme;
-                session(['theme' => $theme]);
-            }
-        } catch (\Exception $e) {
-            Log::error('Error handling external theme change', [
                 'error' => $e->getMessage()
             ]);
         }
@@ -120,16 +85,12 @@ class Appearance extends Component
     public function updatedLanguage($value): void
     {
         try {
-            Log::info('Language updated', ['language' => $value]);
-            
-            // セッションに保存
             session(['locale' => $value]);
-            
-            // アプリケーションロケールを設定
             app()->setLocale($value);
             
-            // 即座に反映させるためのイベント発火
             $this->dispatch('language-updated', language: $value);
+            
+            Log::info('Language updated', ['language' => $value]);
             
         } catch (\Exception $e) {
             Log::error('Error updating language', [
@@ -145,17 +106,15 @@ class Appearance extends Component
     public function updatedTimezone($value): void
     {
         try {
-            Log::info('Timezone updated', ['timezone' => $value]);
-            
-            // 有効なタイムゾーンかチェック
             if (in_array($value, timezone_identifiers_list())) {
                 $user = Auth::user();
                 if ($user) {
                     $user->update(['timezone' => $value]);
                 }
                 
-                // 即座に反映させるためのイベント発火
                 $this->dispatch('timezone-updated', timezone: $value);
+                
+                Log::info('Timezone updated', ['timezone' => $value]);
             }
         } catch (\Exception $e) {
             Log::error('Error updating timezone', [
@@ -196,12 +155,12 @@ class Appearance extends Component
     }
 
     /**
-     * 全設定を一度に更新
+     * フォーム送信処理
      */
     public function updateAppearance(): void
     {
         try {
-            Log::info('Updating all appearance settings', [
+            Log::info('updateAppearance called', [
                 'theme' => $this->theme,
                 'language' => $this->language,
                 'timezone' => $this->timezone,
@@ -209,7 +168,7 @@ class Appearance extends Component
                 'sound_notifications' => $this->sound_notifications
             ]);
 
-            // 全設定をセッションに保存
+            // セッションに全て保存
             session([
                 'theme' => $this->theme,
                 'locale' => $this->language,
@@ -226,16 +185,16 @@ class Appearance extends Component
                 $user->update(['timezone' => $this->timezone]);
             }
 
-            // すべての変更をフロントエンドに通知
-            $this->dispatch('appearance-updated', [
-                'theme' => $this->theme,
-                'language' => $this->language,
-                'timezone' => $this->timezone,
-                'animations' => $this->animations,
-                'sound_notifications' => $this->sound_notifications
-            ]);
+            // フロントエンドに通知（Livewire 3の名前付きパラメータ形式）
+            $this->dispatch('appearance-updated', 
+                theme: $this->theme,
+                language: $this->language,
+                timezone: $this->timezone,
+                animations: $this->animations,
+                sound_notifications: $this->sound_notifications
+            );
 
-            // 成功メッセージを設定
+            // 成功メッセージ
             session()->flash('status', 'appearance-updated');
             
             Log::info('Appearance settings updated successfully');
@@ -255,8 +214,6 @@ class Appearance extends Component
     public function resetToDefaults(): void
     {
         try {
-            Log::info('Resetting appearance settings to defaults');
-            
             $this->theme = 'system';
             $this->language = 'en';
             $this->timezone = config('app.timezone', 'UTC');
@@ -265,10 +222,27 @@ class Appearance extends Component
 
             $this->updateAppearance();
             
-            Log::info('Appearance settings reset to defaults');
-            
         } catch (\Exception $e) {
             Log::error('Error resetting appearance settings', [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * 外部からのテーマ変更を処理（リスナーではなく直接呼び出し用）
+     */
+    public function handleExternalThemeChange($theme): void
+    {
+        try {
+            Log::info('External theme change received', ['theme' => $theme]);
+            
+            if (in_array($theme, ['light', 'dark', 'system'])) {
+                $this->theme = $theme;
+                session(['theme' => $theme]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error handling external theme change', [
                 'error' => $e->getMessage()
             ]);
         }
@@ -319,9 +293,6 @@ class Appearance extends Component
         ];
     }
 
-    /**
-     * レンダリング - 修正版（コンポーネントのみ返す）
-     */
     public function render()
     {
         return view('livewire.settings.appearance', [

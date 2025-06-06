@@ -27,5 +27,7 @@ class LivewireServiceProvider extends ServiceProvider
         Livewire::component('validation-instructions', \App\Livewire\ValidationInstructions::class);
         Livewire::component('subscription-selection', \App\Livewire\SubscriptionSelection::class);
         Livewire::component('settings.appearance', \App\Livewire\Settings\Appearance::class);
+        Livewire::component('settings.profile', \App\Livewire\Settings\Profile::class);
+        Livewire::component('settings.password', \App\Livewire\Settings\Password::class);
     }
 }
