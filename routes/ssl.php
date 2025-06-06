@@ -44,7 +44,7 @@ Route::middleware(['auth', 'verified'])->prefix('ssl')->name('ssl.')->group(func
         return view('ssl.subscriptions.show');
     })->name('subscriptions.show');
     
-    // Billing routes
+    // Billing routes - 修正：billing.indexからssl.billing.indexに変更
     Route::get('/billing', function () {
         return view('billing.index');
     })->name('billing.index');
@@ -65,6 +65,32 @@ Route::middleware(['auth', 'verified'])->prefix('ssl')->name('ssl.')->group(func
         Route::get('provider-performance', [SSLDashboardController::class, 'providerPerformance'])->name('provider-performance');
         Route::get('export/{type}', [SSLDashboardController::class, 'export'])->name('export');
     });
+
+    // Documentation and Support routes
+    Route::prefix('docs')->name('docs.')->group(function () {
+        Route::get('/', function () {
+            return view('ssl.docs.index');
+        })->name('index');
+        
+        Route::get('api', function () {
+            return view('ssl.docs.api');
+        })->name('api');
+        
+        Route::get('webhooks', function () {
+            return view('ssl.docs.webhooks');
+        })->name('webhooks');
+    });
+});
+
+// Profile/Settings routes (if not already defined elsewhere)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/profile/edit', function () {
+        return view('profile.edit');
+    })->name('profile.edit');
+    
+    Route::get('/settings/profile', function () {
+        return view('settings.profile');
+    })->name('settings.profile');
 });
 
 // Admin routes (requires admin permissions)
@@ -147,21 +173,6 @@ Route::group(['prefix' => 'api/ssl', 'middleware' => ['auth:sanctum']], function
     Route::get('/certificate/{certificate}/download', [SSLDashboardController::class, 'downloadCertificate']);
 });
 
-// Documentation routes
-Route::prefix('ssl/docs')->name('ssl.docs.')->group(function () {
-    Route::get('/', function () {
-        return view('ssl.docs.index');
-    })->name('index');
-    
-    Route::get('api', function () {
-        return view('ssl.docs.api');
-    })->name('api');
-    
-    Route::get('webhooks', function () {
-        return view('ssl.docs.webhooks');
-    })->name('webhooks');
-});
-
 // Development routes (only in non-production)
 if (!app()->environment('production')) {
     Route::middleware(['auth'])->prefix('ssl/dev')->name('ssl.dev.')->group(function () {
@@ -174,7 +185,6 @@ if (!app()->environment('production')) {
         })->name('simulate-failure');
     });
 }
-
 
 Route::middleware('auth')->get('/debug-permissions', function () {
     $user = Auth::user();
