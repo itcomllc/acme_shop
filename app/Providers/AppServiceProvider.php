@@ -3,9 +3,8 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\{DB, Log, Cache};
+use Illuminate\Support\Facades\{DB, Log, Cache, Validator};
 use Barryvdh\LaravelIdeHelper\IdeHelperServiceProvider;
-use Illuminate\Support\Facades\Blade;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -25,7 +24,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Configure database query logging in development
+        // Configure database query logging in development (修正版)
         if ($this->app->environment('local') && config('app.debug')) {
             $this->enableQueryLogging();
         }
@@ -52,7 +51,7 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Enable query logging for development
+     * Enable query logging for development - 修正版（無限ループ対策）
      */
     private function enableQueryLogging(): void
     {
@@ -61,18 +60,19 @@ class AppServiceProvider extends ServiceProvider
             return;
         }
 
-        DB::listen(function ($query) {
-            try {
-                // 通常のログチャンネルを使用（databaseではなく）
-                Log::info('Database Query', [
+        try {
+            DB::listen(function ($query) {
+                // database_queriesチャンネルを使用してファイルログに出力
+                Log::channel('database_queries')->info('Database Query', [
                     'sql' => $query->sql,
                     'bindings' => $query->bindings,
                     'time' => $query->time . 'ms'
                 ]);
-            } catch (\Exception $e) {
-                // ログ記録に失敗した場合は無視
-            }
-        });
+            });
+        } catch (\Throwable $e) {
+            // ログ記録に失敗した場合は無視（無限ループ防止）
+            error_log('Query logging setup failed: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -134,7 +134,7 @@ class AppServiceProvider extends ServiceProvider
     private function registerValidationRules(): void
     {
         // Domain validation rule
-        \Illuminate\Support\Facades\Validator::extend('ssl_domain', function ($attribute, $value, $parameters, $validator) {
+        Validator::extend('ssl_domain', function ($attribute, $value, $parameters, $validator) {
             // Validate domain format for SSL certificates
             if (str_starts_with($value, '*.')) {
                 // Wildcard domain validation
@@ -147,13 +147,13 @@ class AppServiceProvider extends ServiceProvider
         });
 
         // SSL provider validation rule
-        \Illuminate\Support\Facades\Validator::extend('ssl_provider', function ($attribute, $value, $parameters, $validator) {
+        Validator::extend('ssl_provider', function ($attribute, $value, $parameters, $validator) {
             $validProviders = ['gogetssl', 'google_certificate_manager', 'lets_encrypt'];
             return in_array($value, $validProviders);
         });
 
         // Certificate type validation rule
-        \Illuminate\Support\Facades\Validator::extend('certificate_type', function ($attribute, $value, $parameters, $validator) {
+        Validator::extend('certificate_type', function ($attribute, $value, $parameters, $validator) {
             $validTypes = ['DV', 'OV', 'EV'];
             return in_array($value, $validTypes);
         });
@@ -171,7 +171,7 @@ class AppServiceProvider extends ServiceProvider
                     try {
                         DB::connection()->getPdo();
                         return ['status' => 'healthy', 'message' => 'Database connection successful'];
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
                         return ['status' => 'unhealthy', 'message' => 'Database connection failed: ' . $e->getMessage()];
                     }
                 },
@@ -183,7 +183,7 @@ class AppServiceProvider extends ServiceProvider
                         return $value === 'test' 
                             ? ['status' => 'healthy', 'message' => 'Cache working correctly']
                             : ['status' => 'unhealthy', 'message' => 'Cache not working'];
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
                         return ['status' => 'unhealthy', 'message' => 'Cache error: ' . $e->getMessage()];
                     }
                 },
@@ -200,7 +200,7 @@ class AppServiceProvider extends ServiceProvider
                             ];
                         }
                         return ['status' => 'warning', 'message' => 'SSL provider factory not available'];
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
                         return ['status' => 'unhealthy', 'message' => 'SSL provider check failed: ' . $e->getMessage()];
                     }
                 }
@@ -216,7 +216,7 @@ class AppServiceProvider extends ServiceProvider
         try {
             DB::connection()->getPdo();
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return false;
         }
     }
@@ -240,7 +240,7 @@ class AppServiceProvider extends ServiceProvider
                 } elseif ($result['status'] === 'warning' && $overallStatus === 'healthy') {
                     $overallStatus = 'warning';
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 $results[$name] = [
                     'status' => 'unhealthy',
                     'message' => 'Health check failed: ' . $e->getMessage()

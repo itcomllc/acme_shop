@@ -46,15 +46,15 @@ return [
     | you a variety of powerful log handlers / formatters to utilize.
     |
     | Available Drivers: "single", "daily", "slack", "syslog",
-    |                    "errorlog", "monolog",
-    |                    "custom", "stack"
+    |                    "errorlog", "monolog", "custom", "stack"
     |
     */
 
     'channels' => [
+
         'stack' => [
             'driver' => 'stack',
-            'channels' => ['single', 'database'],
+            'channels' => explode(',', env('LOG_STACK', 'single')),
             'ignore_exceptions' => false,
         ],
 
@@ -127,21 +127,19 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
-        // Database logging channel
+        // Database logging channel - 修正版
         'database' => [
-            'driver' => 'custom',
-            'via' => \App\Logging\DatabaseLoggerFactory::class,
+            'driver' => 'monolog',
             'level' => env('LOG_LEVEL', 'debug'),
+            'handler' => \App\Logging\DatabaseLogHandler::class,
+            'handler_with' => [],
+            'processors' => [PsrLogMessageProcessor::class],
+            // データベースログでは置換を無効化（パフォーマンス向上）
+            'replace_placeholders' => false,
         ],
 
-        // SSL-specific logging channels
+        // SSL関連のログチャンネル
         'ssl' => [
-            'driver' => 'stack',
-            'channels' => ['ssl_file', 'database'],
-            'ignore_exceptions' => false,
-        ],
-
-        'ssl_file' => [
             'driver' => 'daily',
             'path' => storage_path('logs/ssl.log'),
             'level' => env('LOG_LEVEL', 'debug'),
@@ -149,146 +147,26 @@ return [
             'replace_placeholders' => true,
         ],
 
-        'ssl_certificates' => [
-            'driver' => 'stack',
-            'channels' => ['ssl_certificates_file', 'database'],
-            'ignore_exceptions' => false,
-        ],
-
-        'ssl_certificates_file' => [
+        // SSL プロバイダー別ログ
+        'ssl_providers' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/ssl_certificates.log'),
-            'level' => env('LOG_LEVEL', 'info'),
-            'days' => 90,
+            'path' => storage_path('logs/ssl-providers.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
             'replace_placeholders' => true,
         ],
 
-        'ssl_providers' => [
-            'driver' => 'stack',
-            'channels' => ['ssl_providers_file', 'database'],
-            'ignore_exceptions' => false,
-        ],
-
-        'ssl_providers_file' => [
+        // Square API ログ
+        'square' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/ssl_providers.log'),
+            'path' => storage_path('logs/square.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => 30,
             'replace_placeholders' => true,
         ],
 
-        // Payment and billing logging
-        'payment' => [
-            'driver' => 'stack',
-            'channels' => ['payment_file', 'database'],
-            'ignore_exceptions' => false,
-        ],
-
-        'payment_file' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/payment.log'),
-            'level' => env('LOG_LEVEL', 'info'),
-            'days' => 365, // Keep payment logs longer for audit
-            'replace_placeholders' => true,
-        ],
-
-        // Authentication and security logging
-        'auth' => [
-            'driver' => 'stack',
-            'channels' => ['auth_file', 'database'],
-            'ignore_exceptions' => false,
-        ],
-
-        'auth_file' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/auth.log'),
-            'level' => env('LOG_LEVEL', 'info'),
-            'days' => 90,
-            'replace_placeholders' => true,
-        ],
-
-        'security' => [
-            'driver' => 'stack',
-            'channels' => ['security_file', 'database'],
-            'ignore_exceptions' => false,
-        ],
-
-        'security_file' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/security.log'),
-            'level' => env('LOG_LEVEL', 'warning'),
-            'days' => 365, // Keep security logs longer for audit
-            'replace_placeholders' => true,
-        ],
-
-        // API logging
-        'api' => [
-            'driver' => 'stack',
-            'channels' => ['api_file', 'database'],
-            'ignore_exceptions' => false,
-        ],
-
-        'api_file' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/api.log'),
-            'level' => env('LOG_LEVEL', 'info'),
-            'days' => 30,
-            'replace_placeholders' => true,
-        ],
-
-        // Admin activity logging
-        'admin' => [
-            'driver' => 'stack',
-            'channels' => ['admin_file', 'database'],
-            'ignore_exceptions' => false,
-        ],
-
-        'admin_file' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/admin.log'),
-            'level' => env('LOG_LEVEL', 'info'),
-            'days' => 365, // Keep admin logs longer for audit
-            'replace_placeholders' => true,
-        ],
-
-        // System health and monitoring
-        'monitoring' => [
-            'driver' => 'stack',
-            'channels' => ['monitoring_file', 'database'],
-            'ignore_exceptions' => false,
-        ],
-
-        'monitoring_file' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/monitoring.log'),
-            'level' => env('LOG_LEVEL', 'info'),
-            'days' => 30,
-            'replace_placeholders' => true,
-        ],
-
-        // Job and queue logging
-        'jobs' => [
-            'driver' => 'stack',
-            'channels' => ['jobs_file', 'database'],
-            'ignore_exceptions' => false,
-        ],
-
-        'jobs_file' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/jobs.log'),
-            'level' => env('LOG_LEVEL', 'info'),
-            'days' => 14,
-            'replace_placeholders' => true,
-        ],
-
-        // ACME protocol logging
+        // ACME関連ログ
         'acme' => [
-            'driver' => 'stack',
-            'channels' => ['acme_file', 'database'],
-            'ignore_exceptions' => false,
-        ],
-
-        'acme_file' => [
             'driver' => 'daily',
             'path' => storage_path('logs/acme.log'),
             'level' => env('LOG_LEVEL', 'debug'),
@@ -296,20 +174,42 @@ return [
             'replace_placeholders' => true,
         ],
 
-        // Webhook logging
-        'webhooks' => [
-            'driver' => 'stack',
-            'channels' => ['webhooks_file', 'database'],
-            'ignore_exceptions' => false,
-        ],
-
-        'webhooks_file' => [
+        // システム監視ログ
+        'monitoring' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/webhooks.log'),
+            'path' => storage_path('logs/monitoring.log'),
             'level' => env('LOG_LEVEL', 'info'),
-            'days' => 30,
+            'days' => 7,
             'replace_placeholders' => true,
         ],
+
+        // セキュリティログ
+        'security' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/security.log'),
+            'level' => env('LOG_LEVEL', 'warning'),
+            'days' => 90,
+            'replace_placeholders' => true,
+        ],
+
+        // パフォーマンスログ
+        'performance' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/performance.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => 7,
+            'replace_placeholders' => true,
+        ],
+
+        // データベース専用ログ（従来のファイルベース）
+        'database_queries' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/database.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 3,
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];
