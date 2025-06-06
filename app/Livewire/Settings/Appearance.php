@@ -2,7 +2,7 @@
 
 namespace App\Livewire\Settings;
 
-use Illuminate\Support\Facades\{Auth, Log, Session};
+use Illuminate\Support\Facades\{Auth, Log, Session, Schema};
 use Livewire\Component;
 
 class Appearance extends Component
@@ -25,7 +25,7 @@ class Appearance extends Component
             // ユーザーから設定を取得
             $user = Auth::user();
             if ($user) {
-                $this->timezone = $user->timezone ?? config('app.timezone', 'UTC');
+                $this->timezone = $user->getTimezone();
             } else {
                 $this->timezone = config('app.timezone', 'UTC');
             }
@@ -109,25 +109,46 @@ class Appearance extends Component
     }
 
     /**
-     * タイムゾーン変更時の処理
+     * タイムゾーン変更時の処理（修正版）
      */
     public function updatedTimezone($value): void
     {
         try {
             if (in_array($value, timezone_identifiers_list())) {
                 $user = Auth::user();
-                if ($user && \Schema::hasColumn('users', 'timezone')) {
-                    $user->update(['timezone' => $value]);
+                if ($user) {
+                    Log::info('Before timezone update', [
+                        'user_id' => $user->id,
+                        'current_timezone' => $user->timezone,
+                        'new_timezone' => $value,
+                        'fillable' => $user->getFillable()
+                    ]);
+
+                    // 直接updateメソッドを使用
+                    $updated = $user->update(['timezone' => $value]);
+                    
+                    Log::info('Timezone update result', [
+                        'updated' => $updated,
+                        'user_timezone_after' => $user->fresh()->timezone
+                    ]);
+
+                    if ($updated) {
+                        $this->dispatch('timezone-updated', timezone: $value);
+                        Log::info('Timezone updated successfully', ['timezone' => $value]);
+                    } else {
+                        Log::warning('Timezone update failed');
+                    }
+                } else {
+                    Log::warning('No authenticated user for timezone update');
                 }
-                
-                $this->dispatch('timezone-updated', timezone: $value);
-                
-                Log::info('Timezone updated', ['timezone' => $value]);
+            } else {
+                Log::warning('Invalid timezone provided', ['timezone' => $value]);
             }
         } catch (\Exception $e) {
             Log::error('Error updating timezone', [
                 'timezone' => $value,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
         }
     }
@@ -163,7 +184,7 @@ class Appearance extends Component
     }
 
     /**
-     * フォーム送信処理
+     * フォーム送信処理（修正版）
      */
     public function updateAppearance(): void
     {
@@ -196,10 +217,39 @@ class Appearance extends Component
             // アプリケーションロケールを設定
             app()->setLocale($this->language);
 
-            // ユーザーのタイムゾーンを更新
+            // ユーザーのタイムゾーンを更新（確実に更新）
             $user = Auth::user();
-            if ($user && \Schema::hasColumn('users', 'timezone') && in_array($this->timezone, timezone_identifiers_list())) {
-                $user->update(['timezone' => $this->timezone]);
+            if ($user) {
+                Log::info('Before appearance update - user timezone', [
+                    'user_id' => $user->id,
+                    'current_timezone' => $user->timezone,
+                    'new_timezone' => $this->timezone
+                ]);
+
+                // fillableに確実にtimezoneが含まれていることを確認
+                if (!in_array('timezone', $user->getFillable())) {
+                    Log::error('timezone is not in fillable array', [
+                        'fillable' => $user->getFillable()
+                    ]);
+                }
+
+                // 強制的にtimezone属性を設定
+                $user->timezone = $this->timezone;
+                $saved = $user->save();
+
+                Log::info('Timezone save result', [
+                    'saved' => $saved,
+                    'user_timezone_after_save' => $user->timezone,
+                    'fresh_user_timezone' => $user->fresh()->timezone
+                ]);
+
+                // preferencesも更新
+                $user->updatePreferences([
+                    'theme' => $this->theme,
+                    'language' => $this->language,
+                    'animations' => $this->animations,
+                    'sound_notifications' => $this->sound_notifications,
+                ]);
             }
 
             // サーバーサイドとの同期もここで行う
@@ -221,7 +271,8 @@ class Appearance extends Component
             
         } catch (\Exception $e) {
             Log::error('Error updating appearance settings', [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
             
             session()->flash('error', 'Failed to update appearance settings');

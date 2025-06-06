@@ -7,8 +7,9 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\{HasOne, HasMany, BelongsTo, BelongsToMany};
+use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Str;
-use Illuminate\Database\Eloquent\Relations\{HasOne, HasMany};
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -23,12 +24,14 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $fillable = [
         'name',
         'email',
-        'email_verified_at',
         'square_customer_id',
-        'password',
+        'email_verified_at',
+        'timezone',
+        'preferences',
         'primary_role_id',
         'last_role_change',
         'last_login_at',
+        'password',
     ];
 
     /**
@@ -53,7 +56,16 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
             'last_role_change' => 'datetime',
             'last_login_at' => 'datetime',
+            'preferences' => 'array',
         ];
+    }
+
+    /**
+     * Get the user's primary role
+     */
+    public function primaryRole(): BelongsTo
+    {
+        return $this->belongsTo(Role::class, 'primary_role_id');
     }
 
     /**
@@ -63,8 +75,76 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return Str::of($this->name)
             ->explode(' ')
-            ->map(fn (string $name) => Str::of($name)->substr(0, 1))
+            ->map(fn(string $name) => Str::of($name)->substr(0, 1))
             ->implode('');
+    }
+
+    /**
+     * Get user's timezone or default
+     */
+    public function getTimezone(): string
+    {
+        return $this->timezone ?? config('app.timezone', 'UTC');
+    }
+
+    /**
+     * Check if user can access admin panel
+     */
+    public function canAccessAdmin(): bool
+    {
+        return $this->hasPermission('admin.access');
+    }
+
+    /**
+     * Get user's theme preference
+     */
+    public function getThemePreference(): string
+    {
+        if ($this->preferences && isset($this->preferences['theme'])) {
+            return $this->preferences['theme'];
+        }
+        return 'system';
+    }
+
+    /**
+     * Set user's theme preference
+     */
+    public function setThemePreference(string $theme): void
+    {
+        $preferences = $this->preferences ?? [];
+        $preferences['theme'] = $theme;
+        $this->update(['preferences' => $preferences]);
+    }
+
+    /**
+     * Get user's language preference
+     */
+    public function getLanguagePreference(): string
+    {
+        if ($this->preferences && isset($this->preferences['language'])) {
+            return $this->preferences['language'];
+        }
+        return 'en';
+    }
+
+    /**
+     * Set user's language preference
+     */
+    public function setLanguagePreference(string $language): void
+    {
+        $preferences = $this->preferences ?? [];
+        $preferences['language'] = $language;
+        $this->update(['preferences' => $preferences]);
+    }
+
+    /**
+     * Update user preferences
+     */
+    public function updatePreferences(array $newPreferences): void
+    {
+        $preferences = $this->preferences ?? [];
+        $preferences = array_merge($preferences, $newPreferences);
+        $this->update(['preferences' => $preferences]);
     }
 
     /**
@@ -81,7 +161,7 @@ class User extends Authenticatable implements MustVerifyEmail
                 return null;
             }
         }
-        
+
         return $this->subscriptions->where('status', 'active')->first();
     }
 

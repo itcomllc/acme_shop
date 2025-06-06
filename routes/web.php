@@ -27,7 +27,7 @@ Route::middleware(['auth'])->group(function () {
         return view('livewire.settings.appearance-wrapper');
     })->name('settings.appearance');
 
-    // テーマAPI - 改善版（エラーハンドリング強化）
+    // テーマAPI - 改善版（タイムゾーン更新強化）
     Route::post('/api/user/preferences', function (Illuminate\Http\Request $request) {
         $request->validate([
             'theme' => 'required|in:light,dark,system',
@@ -57,35 +57,83 @@ Route::middleware(['auth'])->group(function () {
             if (Auth::check()) {
                 try {
                     $user = Auth::user();
+                    
+                    Log::info('API: Before user preferences update', [
+                        'user_id' => $user->id,
+                        'current_timezone' => $user->timezone,
+                        'new_timezone' => $request->timezone,
+                        'fillable' => $user->getFillable()
+                    ]);
+
                     $updateData = [];
                     
-                    // テーマ設定（カラムが存在する場合）
-                    if (Schema::hasColumn('users', 'theme_preference')) {
-                        $updateData['theme_preference'] = $request->theme;
+                    // テーマ設定（preferencesに保存）
+                    $preferences = $user->preferences ?? [];
+                    $preferences['theme'] = $request->theme;
+                    
+                    if ($request->has('language')) {
+                        $preferences['language'] = $request->language;
                     }
                     
-                    // タイムゾーン設定
-                    if ($request->has('timezone') && Schema::hasColumn('users', 'timezone')) {
+                    $updateData['preferences'] = $preferences;
+                    
+                    // タイムゾーン設定（確実に更新）
+                    if ($request->has('timezone')) {
                         if (in_array($request->timezone, timezone_identifiers_list())) {
                             $updateData['timezone'] = $request->timezone;
                             $response['timezone'] = $request->timezone;
+                            
+                            Log::info('API: Adding timezone to update data', [
+                                'timezone' => $request->timezone
+                            ]);
                         } else {
-                            Log::warning('Invalid timezone provided', ['timezone' => $request->timezone]);
+                            Log::warning('API: Invalid timezone provided', ['timezone' => $request->timezone]);
                         }
                     }
                     
                     if (!empty($updateData)) {
-                        $user->update($updateData);
-                        Log::info('User preferences updated', [
+                        // fillableプロパティに含まれているかチェック
+                        $fillable = $user->getFillable();
+                        $missingFields = [];
+                        
+                        foreach (array_keys($updateData) as $field) {
+                            if (!in_array($field, $fillable)) {
+                                $missingFields[] = $field;
+                            }
+                        }
+                        
+                        if (!empty($missingFields)) {
+                            Log::warning('API: Fields not in fillable', [
+                                'missing_fields' => $missingFields,
+                                'fillable' => $fillable
+                            ]);
+                        }
+
+                        // 直接属性を設定してからsave
+                        foreach ($updateData as $field => $value) {
+                            $user->$field = $value;
+                        }
+                        
+                        $saved = $user->save();
+                        
+                        Log::info('API: User preferences update result', [
                             'user_id' => $user->id,
-                            'updated_fields' => array_keys($updateData)
+                            'saved' => $saved,
+                            'updated_fields' => array_keys($updateData),
+                            'timezone_after_save' => $user->fresh()->timezone
                         ]);
+
+                        if (!$saved) {
+                            Log::error('API: Failed to save user preferences');
+                            $response['warning'] = 'Failed to save preferences to database';
+                        }
                     }
                 } catch (\Exception $dbError) {
                     // データベース更新に失敗してもセッション更新は成功として扱う
-                    Log::warning('Failed to update user preferences in database', [
+                    Log::error('API: Failed to update user preferences in database', [
                         'user_id' => Auth::id(),
-                        'error' => $dbError->getMessage()
+                        'error' => $dbError->getMessage(),
+                        'trace' => $dbError->getTraceAsString()
                     ]);
                     $response['warning'] = 'Settings saved to session but not persisted to database';
                 }
@@ -100,7 +148,7 @@ Route::middleware(['auth'])->group(function () {
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
-            Log::error('Error updating user preferences', [
+            Log::error('API: Error updating user preferences', [
                 'error' => $e->getMessage(),
                 'user_id' => Auth::id(),
                 'request_data' => $request->only(['theme', 'language', 'timezone'])
@@ -124,11 +172,18 @@ Route::middleware(['auth'])->group(function () {
             if (Auth::check()) {
                 $user = Auth::user();
                 
-                if (Schema::hasColumn('users', 'theme_preference') && $user->theme_preference) {
-                    $theme = $user->theme_preference;
+                // preferencesからテーマと言語を取得
+                if ($user->preferences) {
+                    if (isset($user->preferences['theme'])) {
+                        $theme = $user->preferences['theme'];
+                    }
+                    if (isset($user->preferences['language'])) {
+                        $language = $user->preferences['language'];
+                    }
                 }
                 
-                if (Schema::hasColumn('users', 'timezone') && $user->timezone) {
+                // タイムゾーンを取得
+                if ($user->timezone) {
                     $timezone = $user->timezone;
                 }
             }
@@ -151,7 +206,7 @@ Route::middleware(['auth'])->group(function () {
             ]);
             
         } catch (\Exception $e) {
-            Log::error('Error fetching user preferences', [
+            Log::error('API: Error fetching user preferences', [
                 'error' => $e->getMessage(),
                 'user_id' => Auth::id()
             ]);
