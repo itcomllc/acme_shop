@@ -112,7 +112,7 @@
                             </p>
                         </div>
 
-                        <!-- Language Selection (非ライブ更新) -->
+                        <!-- Language Selection -->
                         <div>
                             <label for="language" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Language') }}</label>
                             <select wire:model="language" name="language" id="language" class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200">
@@ -125,7 +125,7 @@
                             </p>
                         </div>
 
-                        <!-- Timezone Selection (非ライブ更新) -->
+                        <!-- Timezone Selection -->
                         <div>
                             <label for="timezone" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Timezone') }}</label>
                             <select wire:model="timezone" name="timezone" id="timezone" class="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-200">
@@ -138,7 +138,7 @@
                             </p>
                         </div>
 
-                        <!-- Interface Preferences (非ライブ更新) -->
+                        <!-- Interface Preferences -->
                         <div class="space-y-4">
                             <h3 class="text-md font-medium text-gray-900 dark:text-gray-100">{{ __('Interface Preferences') }}</h3>
 
@@ -233,31 +233,45 @@
 
     @script
     <script>
-        // シンプルなイベント処理のみ
-        
-        // テーマ更新イベントの処理
-        $wire.on('theme-updated', (event) => {
-            console.log('Theme updated event received:', event);
-            // ThemeManagerが処理するので、ここでは何もしない
-            // localStorageへの保存もThemeManagerが行う
-        });
-
-        // 外観更新イベントの処理
-        $wire.on('appearance-updated', (event) => {
-            console.log('Appearance updated event received:', event);
+        // グローバルに関数を定義（即座に実行）
+        window.applyTheme = function(theme) {
+            const html = document.documentElement;
+            const body = document.body;
             
-            // 成功メッセージを表示
-            showSuccessMessage('Settings saved successfully!');
-        });
+            console.log('Applying theme:', theme);
+            
+            // 既存クラスを削除
+            html.classList.remove('dark', 'light');
+            if (body) body.classList.remove('dark', 'light');
+            
+            // テーマを適用
+            if (theme === 'dark') {
+                html.classList.add('dark');
+                if (body) body.classList.add('dark');
+            } else if (theme === 'light') {
+                html.classList.add('light');
+                if (body) body.classList.add('light');
+            } else { // system
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (prefersDark) {
+                    html.classList.add('dark');
+                    if (body) body.classList.add('dark');
+                } else {
+                    html.classList.add('light');
+                    if (body) body.classList.add('light');
+                }
+            }
+            
+            // localStorageに保存
+            localStorage.setItem('theme', theme);
+        };
 
-        // 成功メッセージ表示関数
-        function showSuccessMessage(message) {
+        window.showSuccessMessage = function(message) {
             const notification = document.createElement('div');
             notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-300';
             notification.textContent = message;
             document.body.appendChild(notification);
             
-            // 3秒後に削除
             setTimeout(() => {
                 notification.style.opacity = '0';
                 setTimeout(() => {
@@ -266,11 +280,30 @@
                     }
                 }, 300);
             }, 3000);
-        }
+        };
 
-        // 初期化処理
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('Appearance component loaded and ready');
+        // 初期化時にテーマを適用
+        const currentTheme = localStorage.getItem('theme') || 'system';
+        window.applyTheme(currentTheme);
+        console.log('Appearance component initialized with theme:', currentTheme);
+
+        // Livewireイベントリスナー
+        $wire.on('theme-updated', (data) => {
+            console.log('Theme updated event received:', data);
+            const theme = Array.isArray(data) ? data[0]?.theme : data.theme;
+            if (theme) {
+                window.applyTheme(theme);
+                window.showSuccessMessage('Theme updated!');
+            }
+        });
+
+        $wire.on('appearance-updated', (data) => {
+            console.log('Appearance updated event received:', data);
+            const eventData = Array.isArray(data) ? data[0] : data;
+            if (eventData?.theme) {
+                window.applyTheme(eventData.theme);
+            }
+            window.showSuccessMessage('Settings saved successfully!');
         });
     </script>
     @endscript
