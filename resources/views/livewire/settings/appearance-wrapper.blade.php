@@ -1,7 +1,19 @@
 @extends('layouts.app')
 
 @section('content')
-<div>
     @livewire('settings.appearance')
-</div>
 @endsection
+
+@push('scripts')
+<script>
+    // テーママネージャとの連携
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Appearance wrapper loaded');
+        
+        // テーママネージャが利用可能になったらコンポーネントと連携
+        window.whenThemeReady(() => {
+            console.log('ThemeManager ready in appearance wrapper');
+        });
+    });
+</script>
+@endpush

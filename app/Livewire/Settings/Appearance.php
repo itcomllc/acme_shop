@@ -13,7 +13,7 @@ class Appearance extends Component
     public bool $animations = true;
     public bool $sound_notifications = false;
 
-    // Livewireのイベントリスナーは削除（手動で処理）
+    private $lastThemeUpdate = null; // デバウンス用
 
     public function mount(): void
     {
@@ -54,7 +54,7 @@ class Appearance extends Component
     }
 
     /**
-     * テーマ変更時の処理
+     * テーマ変更時の処理（デバウンス機能付き）
      */
     public function updatedTheme($value): void
     {
@@ -63,13 +63,21 @@ class Appearance extends Component
                 $value = 'system';
             }
 
+            // デバウンス処理
+            $now = microtime(true);
+            if ($this->lastThemeUpdate && ($now - $this->lastThemeUpdate) < 0.5) {
+                Log::debug('Theme update throttled', ['value' => $value]);
+                return;
+            }
+            $this->lastThemeUpdate = $now;
+
             // セッションに保存
             session(['theme' => $value]);
             
             // JavaScriptに通知（配列形式で送信）
             $this->dispatch('theme-changed', theme: $value);
             
-            Log::info('Theme updated', ['theme' => $value]);
+            Log::info('Theme updated', ['theme' => $value, 'session_id' => session()->getId()]);
             
         } catch (\Exception $e) {
             Log::error('Error updating theme', [
@@ -108,7 +116,7 @@ class Appearance extends Component
         try {
             if (in_array($value, timezone_identifiers_list())) {
                 $user = Auth::user();
-                if ($user) {
+                if ($user && \Schema::hasColumn('users', 'timezone')) {
                     $user->update(['timezone' => $value]);
                 }
                 
@@ -168,6 +176,15 @@ class Appearance extends Component
                 'sound_notifications' => $this->sound_notifications
             ]);
 
+            // バリデーション
+            if (!in_array($this->theme, ['light', 'dark', 'system'])) {
+                $this->theme = 'system';
+            }
+
+            if (!in_array($this->timezone, timezone_identifiers_list())) {
+                $this->timezone = config('app.timezone', 'UTC');
+            }
+
             // セッションに全て保存
             session([
                 'theme' => $this->theme,
@@ -181,9 +198,12 @@ class Appearance extends Component
 
             // ユーザーのタイムゾーンを更新
             $user = Auth::user();
-            if ($user && in_array($this->timezone, timezone_identifiers_list())) {
+            if ($user && \Schema::hasColumn('users', 'timezone') && in_array($this->timezone, timezone_identifiers_list())) {
                 $user->update(['timezone' => $this->timezone]);
             }
+
+            // サーバーサイドとの同期もここで行う
+            $this->syncPreferencesWithServer();
 
             // フロントエンドに通知（Livewire 3の名前付きパラメータ形式）
             $this->dispatch('appearance-updated', 
@@ -205,6 +225,41 @@ class Appearance extends Component
             ]);
             
             session()->flash('error', 'Failed to update appearance settings');
+        }
+    }
+
+    /**
+     * サーバーAPIとの同期
+     */
+    private function syncPreferencesWithServer(): void
+    {
+        try {
+            // 内部API呼び出しでセッションとの同期
+            $preferences = [
+                'theme' => $this->theme,
+                'language' => $this->language,
+                'timezone' => $this->timezone,
+            ];
+
+            // HTTPクライアントを使用してAPIと同期
+            $response = \Http::withHeaders([
+                'X-CSRF-TOKEN' => csrf_token(),
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+            ])->post(url('/api/user/preferences'), $preferences);
+
+            if (!$response->successful()) {
+                Log::warning('Failed to sync preferences with server', [
+                    'status' => $response->status(),
+                    'body' => $response->body()
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            Log::warning('Error syncing preferences with server', [
+                'error' => $e->getMessage()
+            ]);
+            // サーバー同期の失敗は致命的ではないので続行
         }
     }
 
@@ -240,6 +295,9 @@ class Appearance extends Component
             if (in_array($theme, ['light', 'dark', 'system'])) {
                 $this->theme = $theme;
                 session(['theme' => $theme]);
+                
+                // フロントエンドに通知
+                $this->dispatch('theme-changed', theme: $theme);
             }
         } catch (\Exception $e) {
             Log::error('Error handling external theme change', [

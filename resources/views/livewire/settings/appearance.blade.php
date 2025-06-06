@@ -78,40 +78,41 @@
                         </div>
                     @endif
 
-                    <form wire:submit.prevent="updateAppearance" class="space-y-6">
-                        <!-- Theme Selection -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{{ __('Theme') }}</label>
-                            <div class="mt-2 grid grid-cols-3 gap-4">
-                                <label class="flex flex-col items-center p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors {{ $theme === 'light' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600' }}">
-                                    <input type="radio" wire:model.live="theme" value="light" class="sr-only">
-                                    <svg class="h-8 w-8 mb-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                                    </svg>
-                                    <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Light') }}</span>
-                                </label>
+                    <!-- Theme Selection -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{{ __('Theme') }}</label>
+                        <div class="mt-2 grid grid-cols-3 gap-4">
+                            <label class="flex flex-col items-center p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors {{ $theme === 'light' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600' }}">
+                                <input type="radio" wire:model.live="theme" value="light" class="sr-only">
+                                <svg class="h-8 w-8 mb-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                                </svg>
+                                <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Light') }}</span>
+                            </label>
 
-                                <label class="flex flex-col items-center p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors {{ $theme === 'dark' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600' }}">
-                                    <input type="radio" wire:model.live="theme" value="dark" class="sr-only">
-                                    <svg class="h-8 w-8 mb-2 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                                    </svg>
-                                    <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Dark') }}</span>
-                                </label>
+                            <label class="flex flex-col items-center p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors {{ $theme === 'dark' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600' }}">
+                                <input type="radio" wire:model.live="theme" value="dark" class="sr-only">
+                                <svg class="h-8 w-8 mb-2 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                                </svg>
+                                <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Dark') }}</span>
+                            </label>
 
-                                <label class="flex flex-col items-center p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors {{ $theme === 'system' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600' }}">
-                                    <input type="radio" wire:model.live="theme" value="system" class="sr-only">
-                                    <svg class="h-8 w-8 mb-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                    </svg>
-                                    <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('System') }}</span>
-                                </label>
-                            </div>
-                            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                                {{ __('Choose your preferred theme. System will match your device settings.') }}
-                            </p>
+                            <label class="flex flex-col items-center p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors {{ $theme === 'system' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600' }}">
+                                <input type="radio" wire:model.live="theme" value="system" class="sr-only">
+                                <svg class="h-8 w-8 mb-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('System') }}</span>
+                            </label>
                         </div>
+                        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                            {{ __('Choose your preferred theme. System will match your device settings.') }}
+                        </p>
+                    </div>
 
+                    <!-- Additional Settings Form -->
+                    <form wire:submit.prevent="updateAppearance" class="space-y-6">
                         <!-- Language Selection -->
                         <div>
                             <label for="language" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Language') }}</label>
@@ -233,14 +234,49 @@
 
     @script
     <script>
-        // テーマ変更イベントの処理
+        let themeChangeTimeout;
+        let isProcessingThemeChange = false;
+
+        // デバウンス機能付きテーマ変更処理
+        function processThemeChange(theme) {
+            if (isProcessingThemeChange) {
+                console.log('Theme change already in progress, ignoring:', theme);
+                return;
+            }
+
+            isProcessingThemeChange = true;
+
+            try {
+                console.log('Processing theme change:', theme);
+                
+                if (window.setTheme && typeof window.setTheme === 'function') {
+                    window.setTheme(theme);
+                } else {
+                    console.warn('setTheme function not available');
+                }
+            } catch (error) {
+                console.error('Error processing theme change:', error);
+            } finally {
+                setTimeout(() => {
+                    isProcessingThemeChange = false;
+                }, 300);
+            }
+        }
+
+        // テーマ変更イベントの処理（デバウンス付き）
         Livewire.on('theme-changed', (event) => {
             console.log('Theme changed event received:', event);
-            const theme = event.theme;
             
-            if (window.setTheme && typeof window.setTheme === 'function') {
-                window.setTheme(theme);
+            if (themeChangeTimeout) {
+                clearTimeout(themeChangeTimeout);
             }
+
+            themeChangeTimeout = setTimeout(() => {
+                const theme = event.theme;
+                if (theme) {
+                    processThemeChange(theme);
+                }
+            }, 150); // 150msのデバウンス
         });
 
         // 言語変更イベントの処理
@@ -253,6 +289,11 @@
         // 外観更新イベントの処理
         Livewire.on('appearance-updated', (event) => {
             console.log('Appearance updated:', event);
+            
+            // テーマが変更されている場合は適用
+            if (event.theme) {
+                processThemeChange(event.theme);
+            }
             
             // 成功メッセージを表示
             const message = document.createElement('div');
@@ -270,6 +311,23 @@
         // 初期化処理
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Appearance component loaded');
+            
+            // ThemeManagerが利用可能になるまで待機
+            const waitForThemeManager = () => {
+                if (window.ThemeManager && window.ThemeManager.isInitialized) {
+                    console.log('ThemeManager ready for Appearance component');
+                } else {
+                    setTimeout(waitForThemeManager, 100);
+                }
+            };
+            
+            waitForThemeManager();
+        });
+
+        // Livewire navigated イベント処理
+        document.addEventListener('livewire:navigated', function() {
+            console.log('Appearance component navigated');
+            isProcessingThemeChange = false; // フラグをリセット
         });
     </script>
     @endscript
